@@ -1,6 +1,5 @@
 #include <vivid/ml/onnx_model.h>
 #include <vivid/context.h>
-#include <vivid/video/webcam.h>  // For CPU pixel access
 #include <webgpu/wgpu.h>  // wgpu-native extensions (wgpuDevicePoll)
 #include <onnxruntime_cxx_api.h>
 #include <iostream>
@@ -10,7 +9,11 @@
 #include <atomic>
 #include <cmath>
 
+// Optional: vivid-video integration for efficient CPU pixel access
+#ifdef VIVID_ML_HAS_VIDEO
+#include <vivid/video/webcam.h>
 using vivid::video::Webcam;
+#endif
 
 namespace vivid::ml {
 
@@ -294,7 +297,9 @@ bool ONNXModel::textureToTensor(Context& ctx, Tensor& tensor,
     uint32_t srcWidth = 0, srcHeight = 0;
     uint32_t bytesPerRow = 0;
     bool isBGRA = false;
+    bool usedWebcam = false;
 
+#ifdef VIVID_ML_HAS_VIDEO
     // Check if input is a Webcam with CPU pixel access
     if (auto* webcam = dynamic_cast<Webcam*>(m_inputOp)) {
         pixelData = webcam->cpuPixelData();
@@ -303,8 +308,10 @@ bool ONNXModel::textureToTensor(Context& ctx, Tensor& tensor,
             srcHeight = static_cast<uint32_t>(webcam->captureHeight());
             bytesPerRow = srcWidth * 4;  // CPU buffer is packed RGBA
             isBGRA = false;  // Webcam outputs RGBA after conversion
+            usedWebcam = true;
         }
     }
+#endif
 
     // If no CPU pixel data available, fall back to GPU readback
     if (!pixelData) {
@@ -487,8 +494,8 @@ bool ONNXModel::textureToTensor(Context& ctx, Tensor& tensor,
         }
     }
 
-    // Unmap GPU buffer if we used it
-    if (m_readbackBuffer && !dynamic_cast<Webcam*>(m_inputOp)) {
+    // Unmap GPU buffer if we used it (not when using Webcam CPU path)
+    if (m_readbackBuffer && !usedWebcam) {
         wgpuBufferUnmap(m_readbackBuffer);
     }
 
