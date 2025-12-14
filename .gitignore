@@ -1,0 +1,19 @@
+# Build
+build/
+cmake-build-*/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Dependencies (if fetched locally)
+external/
+
+# Test outputs
+*.log
