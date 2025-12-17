@@ -37,13 +37,13 @@ jobs:
           mkdir -p vivid-sdk
           DOWNLOAD_URL="https://github.com/${{ env.VIVID_REPO }}/releases/latest/download/${{ matrix.vivid_archive }}"
           echo "Downloading vivid from: $DOWNLOAD_URL"
-          curl -fL -o vivid-sdk/vivid-archive "$DOWNLOAD_URL"
+          curl -fL -o vivid-sdk/archive "$DOWNLOAD_URL"
 
       - name: Extract vivid SDK (Unix)
         if: runner.os != 'Windows'
         run: |
           cd vivid-sdk
-          tar -xzf vivid-archive
+          tar -xzf archive
           VIVID_DIR=$(ls -d vivid-* | head -1)
           echo "VIVID_ROOT=$(pwd)/$VIVID_DIR" >> $GITHUB_ENV
 
@@ -52,7 +52,7 @@ jobs:
         shell: pwsh
         run: |
           cd vivid-sdk
-          Expand-Archive -Path vivid-archive -DestinationPath .
+          Expand-Archive -Path archive -DestinationPath .
           $VIVID_DIR = Get-ChildItem -Directory -Name | Where-Object { $_ -match "^vivid-" } | Select-Object -First 1
           echo "VIVID_ROOT=$(Get-Location)\$VIVID_DIR" >> $env:GITHUB_ENV
 

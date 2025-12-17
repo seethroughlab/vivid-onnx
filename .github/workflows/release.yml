@@ -26,7 +26,7 @@ jobs:
             target: darwin-arm64
             archive_ext: tar.gz
             vivid_archive: vivid-darwin-arm64.tar.gz
-          - os: macos-13          # Intel
+          - os: macos-14          # Intel (cross-compile on ARM runner)
             target: darwin-x64
             archive_ext: tar.gz
             vivid_archive: vivid-darwin-x64.tar.gz
@@ -97,7 +97,13 @@ jobs:
             libxkbcommon-dev \
             libgl1-mesa-dev
 
+      - name: Configure CMake (darwin-x64 cross-compile)
+        if: matrix.target == 'darwin-x64'
+        shell: bash
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DVIVID_ROOT="$VIVID_ROOT" -DVIVID_ML_WITH_VIDEO=OFF
+
       - name: Configure CMake
+        if: matrix.target != 'darwin-x64'
         shell: bash
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DVIVID_ROOT="$VIVID_ROOT" -DVIVID_ML_WITH_VIDEO=OFF
 
