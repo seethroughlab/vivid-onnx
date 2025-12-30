@@ -31,8 +31,15 @@ target_link_libraries(test_vivid_ml PRIVATE
     vivid-ml
 )
 
+# Tests need vivid-core for OperatorRegistry symbols (addon uses -undefined dynamic_lookup)
+if(DEFINED VIVID_ROOT AND EXISTS "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
+    target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
+endif()
+
 target_include_directories(test_vivid_ml PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
 
-catch_discover_tests(test_vivid_ml)
+# Disable catch_discover_tests (crashes during build due to ONNX Runtime dylib path)
+# Use add_test instead - run all tests as a single test case
+add_test(NAME vivid_ml_tests COMMAND test_vivid_ml)
