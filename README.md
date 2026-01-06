@@ -9,7 +9,7 @@ Machine learning inference for creative applications via ONNX Runtime.
 ## Installation
 
 ```bash
-vivid libs install https://github.com/seethroughlab/vivid-ml
+vivid modules install https://github.com/seethroughlab/vivid-ml
 ```
 
 ## Operators
@@ -60,7 +60,7 @@ void setup(Context& ctx) {
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
     chain.add<PoseDetector>("pose")
         .input("webcam")
-        .model(home + "/.vivid/libs/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx")
+        .model(home + "/.vivid/modules/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx")
         .confidenceThreshold(0.3f);
 
     // Canvas for skeleton overlay

@@ -70,7 +70,7 @@ void setup(Context& ctx) {
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
     auto& pose = chain.add<PoseDetector>("pose");
     pose.input(&cam);
-    pose.model(home + "/.vivid/libs/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx");
+    pose.model(home + "/.vivid/modules/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx");
 
     // Canvas for skeleton overlay
     auto& canvas = chain.add<Canvas>("skeleton");
