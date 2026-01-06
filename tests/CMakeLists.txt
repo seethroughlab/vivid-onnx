@@ -24,6 +24,8 @@ include(Catch)
 add_executable(test_vivid_ml
     test_tensor.cpp
     test_pose_detector.cpp
+    test_inference.cpp
+    test_onnx_inference.cpp
 )
 
 target_link_libraries(test_vivid_ml PRIVATE
@@ -38,8 +40,13 @@ endif()
 
 target_include_directories(test_vivid_ml PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${ONNXRUNTIME_INCLUDE_DIR}
 )
 
 # Disable catch_discover_tests (crashes during build due to ONNX Runtime dylib path)
 # Use add_test instead - run all tests as a single test case
+# Set working directory to source root so tests can find model files
 add_test(NAME vivid_ml_tests COMMAND test_vivid_ml)
+set_tests_properties(vivid_ml_tests PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)

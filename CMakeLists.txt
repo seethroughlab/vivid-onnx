@@ -33,14 +33,14 @@ elseif(DEFINED VIVID_ROOT)
     # Standalone build with SDK path or source tree
     message(STATUS "[vivid-ml] Using VIVID_ROOT: ${VIVID_ROOT}")
 
-    # Check for SDK layout (include/vivid) or source tree layout (core/include/vivid)
+    # Check for SDK layout (include/vivid) or source tree layout (src/vivid-core/include/vivid)
     if(EXISTS "${VIVID_ROOT}/include/vivid/vivid.h")
         # SDK package layout - all headers bundled in include/
         set(VIVID_INCLUDE_DIR "${VIVID_ROOT}/include")
         set(VIVID_DEP_INCLUDE_DIRS "${VIVID_ROOT}/include")  # GLM, GLFW, WebGPU all in include/
-    elseif(EXISTS "${VIVID_ROOT}/core/include/vivid/vivid.h")
+    elseif(EXISTS "${VIVID_ROOT}/src/vivid-core/include/vivid/vivid.h")
         # Source tree layout - headers spread across build/_deps
-        set(VIVID_INCLUDE_DIR "${VIVID_ROOT}/core/include")
+        set(VIVID_INCLUDE_DIR "${VIVID_ROOT}/src/vivid-core/include")
 
         # Find dependency headers in build/_deps
         set(VIVID_DEP_INCLUDE_DIRS "")
@@ -69,7 +69,7 @@ elseif(DEFINED VIVID_ROOT)
     else()
         message(FATAL_ERROR "[vivid-ml] VIVID_ROOT specified but headers not found.\n"
             "  Checked: ${VIVID_ROOT}/include/vivid/vivid.h\n"
-            "  Checked: ${VIVID_ROOT}/core/include/vivid/vivid.h")
+            "  Checked: ${VIVID_ROOT}/src/vivid-core/include/vivid/vivid.h")
     endif()
     message(STATUS "[vivid-ml] Found vivid headers at: ${VIVID_INCLUDE_DIR}")
     message(STATUS "[vivid-ml] Dependency include dirs: ${VIVID_DEP_INCLUDE_DIRS}")
@@ -153,6 +153,22 @@ set(ML_SOURCES
 )
 
 add_library(vivid-ml SHARED ${ML_SOURCES})
+
+# Output to lib/ for consistent directory structure (matches runtime expectations)
+set_target_properties(vivid-ml PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib
+)
+
+# Copy ONNX Runtime to lib/ for development (runtime needs it alongside vivid-ml)
+add_custom_command(TARGET vivid-ml POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${onnxruntime_SOURCE_DIR}/lib/libonnxruntime.${ONNXRUNTIME_VERSION}.dylib
+        ${CMAKE_SOURCE_DIR}/lib/
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+        libonnxruntime.${ONNXRUNTIME_VERSION}.dylib
+        ${CMAKE_SOURCE_DIR}/lib/libonnxruntime.dylib
+    COMMENT "Copying ONNX Runtime to lib/"
+)
 
 target_include_directories(vivid-ml
     PUBLIC

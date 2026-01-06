@@ -1,6 +1,6 @@
-# Vivid ML Addon
+# Vivid ML Library
 
-Machine Learning addon for Vivid using ONNX Runtime.
+Machine Learning library for Vivid using ONNX Runtime.
 
 ## Build Commands
 
@@ -13,7 +13,7 @@ cd vivid-ml
 cmake -B build -DVIVID_ROOT=/path/to/vivid && cmake --build build
 ```
 
-## Phase 12: Machine Learning Addon (ONNX)
+## Machine Learning Library (ONNX)
 
 **Goal:** ML inference for creative applications
 
@@ -44,56 +44,65 @@ public:
 
 ## MoveNet Body Tracking Example
 
-MoveNet Lightning detects 17 body keypoints in real-time. Download the ONNX model from TensorFlow Hub.
+MoveNet Lightning detects 17 body keypoints in real-time. The model is bundled in `assets/models/movenet/`.
 
 ```cpp
-// examples/movenet-tracking/chain.cpp
+// examples/pose-tracking/chain.cpp
 #include <vivid/vivid.h>
-#include <vivid/media/webcam.h>
-#include <vivid/ml/pose_detector.h>
+#include <vivid/video/video.h>
+#include <vivid/ml/ml.h>
 #include <vivid/effects/effects.h>
+#include <cstdlib>
 
 using namespace vivid;
+using namespace vivid::video;
+using namespace vivid::ml;
+using namespace vivid::effects;
 
 void setup(Context& ctx) {
     auto& chain = ctx.chain();
 
     // Webcam input
     auto& cam = chain.add<Webcam>("cam");
-    cam.resolution(640, 480);
+    cam.setResolution(640, 480);
 
     // MoveNet pose detection (Lightning = fast, Thunder = accurate)
+    std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
     auto& pose = chain.add<PoseDetector>("pose");
-    pose.input("cam");
-    pose.setModel("assets/models/movenet_lightning.onnx");
+    pose.input(&cam);
+    pose.model(home + "/.vivid/libs/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx");
 
-    // Visualize skeleton on top of camera feed
+    // Canvas for skeleton overlay
+    auto& canvas = chain.add<Canvas>("skeleton");
+    canvas.size(640, 480);
+
+    // Composite webcam and skeleton
     auto& out = chain.add<Composite>("out");
-    out.inputA("cam");
-    out.inputB("pose");  // PoseDetector outputs skeleton overlay
+    out.input(0, "cam");
+    out.input(1, "skeleton");
+    out.mode(BlendMode::Over);
 
     chain.output("out");
 }
 
 void update(Context& ctx) {
     auto& chain = ctx.chain();
-
-    // Access individual keypoints (normalized 0-1 coordinates)
     auto& pose = chain.get<PoseDetector>("pose");
+    auto& canvas = chain.get<Canvas>("skeleton");
+
+    canvas.clear(0, 0, 0, 0);
 
     if (pose.detected()) {
-        // 17 keypoints: nose, eyes, ears, shoulders, elbows, wrists,
-        //               hips, knees, ankles
-        glm::vec2 nose = pose.keypoint(PoseDetector::Nose);
-        glm::vec2 leftWrist = pose.keypoint(PoseDetector::LeftWrist);
-        glm::vec2 rightWrist = pose.keypoint(PoseDetector::RightWrist);
+        // Access individual keypoints (normalized 0-1 coordinates)
+        glm::vec2 nose = pose.keypoint(Keypoint::Nose);
+        float confidence = pose.confidence(Keypoint::Nose);
 
-        float confidence = pose.confidence(PoseDetector::Nose);
-
-        // Use keypoints to drive effects
-        if (confidence > 0.5f) {
-            float handDistance = glm::distance(leftWrist, rightWrist);
-            chain.get<Noise>("effect").scale = handDistance * 20.0f;
+        // Draw keypoints using Canvas path API
+        if (confidence > 0.3f) {
+            canvas.fillStyle(1, 0, 0, 1);
+            canvas.beginPath();
+            canvas.arc(nose.x * 640, nose.y * 480, 8.0f, 0, 6.28f);
+            canvas.fill();
         }
     }
 }

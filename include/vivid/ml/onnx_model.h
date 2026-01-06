@@ -16,9 +16,10 @@
 #pragma once
 
 #include <vivid/operator.h>
+#include <vivid/io/image_loader.h>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 // Forward declarations for ONNX Runtime
 namespace Ort {
@@ -99,6 +100,10 @@ protected:
     // Input texture to tensor conversion (GPU readback + preprocessing)
     bool textureToTensor(Context& ctx, Tensor& tensor,
                          int targetWidth, int targetHeight);
+
+    // CPU pixel data to tensor conversion (faster path when available)
+    bool cpuPixelsToTensor(const io::ImageData& pixels, Tensor& tensor,
+                           int targetWidth, int targetHeight);
 
     std::string m_modelPath;
     Operator* m_inputOp = nullptr;

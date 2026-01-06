@@ -1,6 +1,11 @@
 # Build
 build/
 cmake-build-*/
+lib/
+
+# ML Models (large files)
+assets/
+src/assets
 
 # IDE
 .vscode/

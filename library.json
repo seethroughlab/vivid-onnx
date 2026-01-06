@@ -1,6 +1,6 @@
 {
   "name": "vivid-ml",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Machine learning inference for creative applications via ONNX Runtime",
   "author": "Vivid",
   "license": "MIT",

@@ -2,13 +2,17 @@
 // Demonstrates body pose detection using MoveNet via ONNX Runtime
 // with skeleton visualization overlay
 //
-// Requires MoveNet ONNX model in addons/vivid-ml/assets/models/movenet/singlepose-lightning.onnx
+// Requires MoveNet ONNX model. Model path options:
+//   - assets/models/movenet/singlepose-lightning.onnx (if running from vivid-ml dir)
+//   - ~/.vivid/libs/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx (if installed)
 // From PINTO_model_zoo: https://github.com/PINTO0309/PINTO_model_zoo/tree/main/115_MoveNet
 
 #include <vivid/vivid.h>
 #include <vivid/video/video.h>
 #include <vivid/ml/ml.h>
 #include <vivid/effects/effects.h>
+#include <cmath>
+#include <cstdlib>
 #include <iostream>
 
 using namespace vivid;
@@ -16,7 +20,7 @@ using namespace vivid::video;
 using namespace vivid::ml;
 using namespace vivid::effects;
 
-// Colors for different body parts
+// Colors for different body parts (RGBA 0-1)
 static const glm::vec4 COLOR_FACE = {0.2f, 0.8f, 1.0f, 1.0f};      // Cyan
 static const glm::vec4 COLOR_ARM_L = {1.0f, 0.4f, 0.4f, 1.0f};     // Red
 static const glm::vec4 COLOR_ARM_R = {0.4f, 1.0f, 0.4f, 1.0f};     // Green
@@ -56,26 +60,29 @@ void setup(Context& ctx) {
     auto& chain = ctx.chain();
 
     // Webcam input (pose detection source)
-    auto& webcam = chain.add<Webcam>("webcam")
-        .resolution(1280, 720)
-        .frameRate(30);
+    auto& webcam = chain.add<Webcam>("webcam");
+    webcam.setResolution(1280, 720);
+    webcam.setFrameRate(30);
 
     // Pose detector using MoveNet SinglePose Lightning
     // From PINTO_model_zoo - float32 ONNX, expects 0-1 normalized input
-    chain.add<PoseDetector>("pose")
-        .input(&webcam)
-        .model("addons/vivid-ml/assets/models/movenet/singlepose-lightning.onnx")
-        .confidenceThreshold(0.05f);
+    // Uses cpuPixels() from Webcam for efficient inference (no GPU readback)
+    auto& pose = chain.add<PoseDetector>("pose");
+    pose.input(&webcam);
+    // Model path - expand ~ to home directory
+    std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
+    pose.model(home + "/.vivid/libs/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx");
+    pose.confidenceThreshold(0.05f);
 
     // Canvas overlay for skeleton visualization
-    auto& canvas = chain.add<Canvas>("skeleton")
-        .size(1280, 720);
+    auto& canvas = chain.add<Canvas>("skeleton");
+    canvas.size(1280, 720);
 
     // Composite webcam and skeleton overlay
-    chain.add<Composite>("output")
-        .input(0, &webcam)
-        .input(1, &canvas)
-        .mode(BlendMode::Over);
+    auto& comp = chain.add<Composite>("output");
+    comp.input(0, "webcam");
+    comp.input(1, "skeleton");
+    comp.mode(BlendMode::Over);
 
     chain.output("output");
 
@@ -100,6 +107,10 @@ void update(Context& ctx) {
     canvas.clear(0, 0, 0, 0);
 
     if (pose.detected()) {
+        // Set line style for skeleton
+        canvas.lineWidth(lineWidth);
+        canvas.lineCap(LineCap::Round);
+
         // Draw skeleton lines using SKELETON_CONNECTIONS from pose_detector.h
         for (const auto& bone : ml::SKELETON_CONNECTIONS) {
             float conf1 = pose.confidence(bone.from);
@@ -123,7 +134,12 @@ void update(Context& ctx) {
                 float avgConf = (conf1 + conf2) * 0.5f;
                 color.a = std::min(1.0f, avgConf * 10.0f);  // Scale up low confidence
 
-                canvas.line(x1, y1, x2, y2, lineWidth, color);
+                // Draw line using path API
+                canvas.strokeStyle(color.r, color.g, color.b, color.a);
+                canvas.beginPath();
+                canvas.moveTo(x1, y1);
+                canvas.lineTo(x2, y2);
+                canvas.stroke();
             }
         }
 
@@ -140,9 +156,16 @@ void update(Context& ctx) {
                 glm::vec4 color = getKeypointColor(kp);
                 color.a = std::min(1.0f, conf * 10.0f);
 
-                // Draw filled circle with outline
-                canvas.circleFilled(x, y, pointRadius, color);
-                canvas.circle(x, y, pointRadius, 2.0f, {1, 1, 1, color.a * 0.8f});
+                // Draw filled circle using arc
+                canvas.fillStyle(color.r, color.g, color.b, color.a);
+                canvas.beginPath();
+                canvas.arc(x, y, pointRadius, 0, 2.0f * 3.14159f);
+                canvas.fill();
+
+                // Draw outline
+                canvas.strokeStyle(1, 1, 1, color.a * 0.8f);
+                canvas.lineWidth(2.0f);
+                canvas.stroke();
             }
         }
     }

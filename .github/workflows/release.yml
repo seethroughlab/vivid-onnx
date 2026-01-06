@@ -128,8 +128,8 @@ jobs:
           # Copy headers
           cp -r include/* package/vivid-ml-${{ matrix.target }}/include/
 
-          # Copy addon.json
-          cp addon.json package/vivid-ml-${{ matrix.target }}/
+          # Copy library.json
+          cp library.json package/vivid-ml-${{ matrix.target }}/
 
           # Create archive
           cd package
@@ -152,8 +152,8 @@ jobs:
           # Copy headers
           Copy-Item -Recurse include/* package/vivid-ml-${{ matrix.target }}/include/
 
-          # Copy addon.json
-          Copy-Item addon.json package/vivid-ml-${{ matrix.target }}/
+          # Copy library.json
+          Copy-Item library.json package/vivid-ml-${{ matrix.target }}/
 
           # Create archive
           Compress-Archive -Path package/vivid-ml-${{ matrix.target }} -DestinationPath package/vivid-ml-${{ matrix.target }}.${{ matrix.archive_ext }}

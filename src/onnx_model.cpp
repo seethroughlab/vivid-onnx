@@ -2,12 +2,13 @@
 #include <vivid/context.h>
 #include <webgpu/wgpu.h>  // wgpu-native extensions (wgpuDevicePoll)
 #include <onnxruntime_cxx_api.h>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cmath>
 #include <iostream>
 #include <numeric>
 #include <thread>
-#include <chrono>
-#include <atomic>
-#include <cmath>
 
 
 namespace vivid::ml {
@@ -287,7 +288,12 @@ bool ONNXModel::textureToTensor(Context& ctx, Tensor& tensor,
                                  int targetWidth, int targetHeight) {
     if (!m_inputOp) return false;
 
-    // Get pixel data via GPU readback from input texture
+    // Try CPU pixel path first (faster than GPU readback)
+    if (auto pixels = m_inputOp->cpuPixels()) {
+        return cpuPixelsToTensor(*pixels, tensor, targetWidth, targetHeight);
+    }
+
+    // Fall back to GPU readback from input texture
     WGPUTexture srcTexture = m_inputOp->outputTexture();
     if (!srcTexture) return false;
 
@@ -469,6 +475,102 @@ bool ONNXModel::textureToTensor(Context& ctx, Tensor& tensor,
     // Unmap GPU readback buffer
     if (m_readbackBuffer) {
         wgpuBufferUnmap(m_readbackBuffer);
+    }
+
+    return true;
+}
+
+bool ONNXModel::cpuPixelsToTensor(const io::ImageData& pixels, Tensor& tensor,
+                                   int targetWidth, int targetHeight) {
+    if (pixels.pixels.empty() || pixels.width <= 0 || pixels.height <= 0) {
+        return false;
+    }
+
+    int srcWidth = pixels.width;
+    int srcHeight = pixels.height;
+    int srcChannels = pixels.channels;
+    const uint8_t* pixelData = pixels.pixels.data();
+
+    // Determine tensor format from shape (NHWC vs NCHW)
+    bool isNHWC = true;
+    int channels = 3;
+    if (tensor.shape.size() >= 4) {
+        if (tensor.shape[1] <= 4) {
+            isNHWC = false;
+            channels = static_cast<int>(tensor.shape[1]);
+        } else {
+            channels = static_cast<int>(tensor.shape[3]);
+        }
+    }
+
+    // Resize and convert to tensor using bilinear interpolation
+    float scaleX = static_cast<float>(srcWidth) / targetWidth;
+    float scaleY = static_cast<float>(srcHeight) / targetHeight;
+
+    for (int y = 0; y < targetHeight; y++) {
+        for (int x = 0; x < targetWidth; x++) {
+            float srcX = (x + 0.5f) * scaleX - 0.5f;
+            float srcY = (y + 0.5f) * scaleY - 0.5f;
+
+            int x0 = std::max(0, std::min(static_cast<int>(srcX), srcWidth - 1));
+            int y0 = std::max(0, std::min(static_cast<int>(srcY), srcHeight - 1));
+            int x1 = std::max(0, std::min(x0 + 1, srcWidth - 1));
+            int y1 = std::max(0, std::min(y0 + 1, srcHeight - 1));
+
+            float fx = srcX - std::floor(srcX);
+            float fy = srcY - std::floor(srcY);
+
+            auto getPixel = [&](int px, int py) -> std::array<float, 4> {
+                const uint8_t* p = pixelData + (py * srcWidth + px) * srcChannels;
+                std::array<float, 4> result = {0, 0, 0, 1};
+                for (int c = 0; c < srcChannels && c < 4; c++) {
+                    result[c] = p[c] / 255.0f;
+                }
+                return result;
+            };
+
+            auto p00 = getPixel(x0, y0), p10 = getPixel(x1, y0);
+            auto p01 = getPixel(x0, y1), p11 = getPixel(x1, y1);
+
+            std::array<float, 4> result;
+            for (int c = 0; c < 4; c++) {
+                float v0 = p00[c] * (1 - fx) + p10[c] * fx;
+                float v1 = p01[c] * (1 - fx) + p11[c] * fx;
+                result[c] = v0 * (1 - fy) + v1 * fy;
+            }
+
+            if (tensor.type == TensorType::UInt8) {
+                if (isNHWC) {
+                    size_t baseIdx = (y * targetWidth + x) * channels;
+                    for (int c = 0; c < channels && c < 4; c++)
+                        tensor.dataU8[baseIdx + c] = static_cast<uint8_t>(result[c] * 255.0f);
+                } else {
+                    size_t pixelIdx = y * targetWidth + x;
+                    for (int c = 0; c < channels && c < 4; c++)
+                        tensor.dataU8[c * targetWidth * targetHeight + pixelIdx] = static_cast<uint8_t>(result[c] * 255.0f);
+                }
+            } else if (tensor.type == TensorType::Int32) {
+                if (isNHWC) {
+                    size_t baseIdx = (y * targetWidth + x) * channels;
+                    for (int c = 0; c < channels && c < 4; c++)
+                        tensor.dataI32[baseIdx + c] = static_cast<int32_t>(result[c] * 255.0f);
+                } else {
+                    size_t pixelIdx = y * targetWidth + x;
+                    for (int c = 0; c < channels && c < 4; c++)
+                        tensor.dataI32[c * targetWidth * targetHeight + pixelIdx] = static_cast<int32_t>(result[c] * 255.0f);
+                }
+            } else {
+                if (isNHWC) {
+                    size_t baseIdx = (y * targetWidth + x) * channels;
+                    for (int c = 0; c < channels && c < 4; c++)
+                        tensor.data[baseIdx + c] = result[c];
+                } else {
+                    size_t pixelIdx = y * targetWidth + x;
+                    for (int c = 0; c < channels && c < 4; c++)
+                        tensor.data[c * targetWidth * targetHeight + pixelIdx] = result[c];
+                }
+            }
+        }
     }
 
     return true;

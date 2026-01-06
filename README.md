@@ -8,7 +8,9 @@ Machine learning inference for creative applications via ONNX Runtime.
 
 ## Installation
 
-[TO DO]
+```bash
+vivid libs install https://github.com/seethroughlab/vivid-ml
+```
 
 ## Operators
 
@@ -41,6 +43,7 @@ Models from [PINTO_model_zoo](https://github.com/PINTO0309/PINTO_model_zoo/tree/
 #include <vivid/video/video.h>
 #include <vivid/ml/ml.h>
 #include <vivid/effects/effects.h>
+#include <cstdlib>
 
 using namespace vivid::video;
 using namespace vivid::ml;
@@ -51,12 +54,13 @@ void setup(Context& ctx) {
 
     // Webcam input
     chain.add<Webcam>("webcam")
-        .resolution(1280, 720);
+        .setResolution(1280, 720);
 
-    // Pose detection
+    // Pose detection - model path for installed library
+    std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
     chain.add<PoseDetector>("pose")
         .input("webcam")
-        .model("addons/vivid-ml/assets/models/movenet/singlepose-lightning.onnx")
+        .model(home + "/.vivid/libs/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx")
         .confidenceThreshold(0.3f);
 
     // Canvas for skeleton overlay
@@ -78,12 +82,15 @@ void update(Context& ctx) {
     canvas.clear(0, 0, 0, 0);
 
     if (pose.detected()) {
-        // Draw keypoints
+        // Draw keypoints using Canvas path API
         for (int i = 0; i < 17; i++) {
             auto kp = static_cast<Keypoint>(i);
             if (pose.confidence(kp) > 0.3f) {
                 auto p = pose.keypoint(kp);
-                canvas.circleFilled(p.x * 1280, p.y * 720, 8.0f, {1, 0, 0, 1});
+                canvas.fillStyle(1, 0, 0, 1);
+                canvas.beginPath();
+                canvas.arc(p.x * 1280, p.y * 720, 8.0f, 0, 6.28f);
+                canvas.fill();
             }
         }
     }
