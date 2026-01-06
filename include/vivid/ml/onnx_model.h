@@ -97,21 +97,17 @@ protected:
     // Helper to run inference
     void runInference();
 
-    // Input texture to tensor conversion (GPU readback + preprocessing)
+    // Input texture to tensor conversion (via CPU pixels)
     bool textureToTensor(Context& ctx, Tensor& tensor,
                          int targetWidth, int targetHeight);
 
-    // CPU pixel data to tensor conversion (faster path when available)
+    // CPU pixel data to tensor conversion
     bool cpuPixelsToTensor(const io::ImageData& pixels, Tensor& tensor,
                            int targetWidth, int targetHeight);
 
     std::string m_modelPath;
     Operator* m_inputOp = nullptr;
     bool m_loaded = false;
-
-    // GPU readback resources
-    WGPUBuffer m_readbackBuffer = nullptr;
-    size_t m_readbackBufferSize = 0;
 
     // ONNX Runtime objects (pimpl to avoid header pollution)
     struct OrtObjects;

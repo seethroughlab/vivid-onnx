@@ -1,14 +1,10 @@
 #include <vivid/ml/onnx_model.h>
 #include <vivid/context.h>
-#include <webgpu/wgpu.h>  // wgpu-native extensions (wgpuDevicePoll)
 #include <onnxruntime_cxx_api.h>
 #include <array>
-#include <atomic>
-#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <numeric>
-#include <thread>
 
 
 namespace vivid::ml {
@@ -62,12 +58,7 @@ struct ONNXModel::OrtObjects {
 ONNXModel::ONNXModel() : m_ort(std::make_unique<OrtObjects>()) {
 }
 
-ONNXModel::~ONNXModel() {
-    if (m_readbackBuffer) {
-        wgpuBufferRelease(m_readbackBuffer);
-        m_readbackBuffer = nullptr;
-    }
-}
+ONNXModel::~ONNXModel() = default;
 
 ONNXModel& ONNXModel::model(const std::string& path) {
     m_modelPath = path;
@@ -187,8 +178,8 @@ void ONNXModel::init(Context& ctx) {
 void ONNXModel::process(Context& ctx) {
     if (!m_loaded || !m_inputOp) return;
 
-    WGPUTextureView inputView = m_inputOp->outputView();
-    if (!inputView) return;
+    // Check that input provides CPU pixels (required for ML inference)
+    if (!m_inputOp->cpuPixels()) return;
 
     // Prepare input tensor (subclass can override)
     if (!m_inputTensors.empty()) {
@@ -205,10 +196,6 @@ void ONNXModel::process(Context& ctx) {
 }
 
 void ONNXModel::cleanup() {
-    if (m_readbackBuffer) {
-        wgpuBufferRelease(m_readbackBuffer);
-        m_readbackBuffer = nullptr;
-    }
     m_ort->session.reset();
     m_loaded = false;
 }
@@ -288,196 +275,14 @@ bool ONNXModel::textureToTensor(Context& ctx, Tensor& tensor,
                                  int targetWidth, int targetHeight) {
     if (!m_inputOp) return false;
 
-    // Try CPU pixel path first (faster than GPU readback)
-    if (auto pixels = m_inputOp->cpuPixels()) {
-        return cpuPixelsToTensor(*pixels, tensor, targetWidth, targetHeight);
-    }
-
-    // Fall back to GPU readback from input texture
-    WGPUTexture srcTexture = m_inputOp->outputTexture();
-    if (!srcTexture) return false;
-
-    WGPUDevice device = ctx.device();
-    WGPUQueue queue = ctx.queue();
-
-    uint32_t srcWidth = wgpuTextureGetWidth(srcTexture);
-    uint32_t srcHeight = wgpuTextureGetHeight(srcTexture);
-    WGPUTextureFormat srcFormat = wgpuTextureGetFormat(srcTexture);
-
-    uint32_t bytesPerRow = (srcWidth * 4 + 255) & ~255;  // 256-byte aligned for GPU
-    size_t requiredSize = bytesPerRow * srcHeight;
-
-    // Create or resize readback buffer
-    if (!m_readbackBuffer || m_readbackBufferSize < requiredSize) {
-        if (m_readbackBuffer) {
-            wgpuBufferRelease(m_readbackBuffer);
-        }
-        WGPUBufferDescriptor bufferDesc = {};
-        bufferDesc.size = requiredSize;
-        bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
-        bufferDesc.mappedAtCreation = false;
-        m_readbackBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
-        m_readbackBufferSize = requiredSize;
-    }
-
-    // Copy texture to buffer
-    WGPUCommandEncoderDescriptor encoderDesc = {};
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
-
-    WGPUTexelCopyTextureInfo srcCopy = {};
-    srcCopy.texture = srcTexture;
-    srcCopy.mipLevel = 0;
-    srcCopy.origin = {0, 0, 0};
-    srcCopy.aspect = WGPUTextureAspect_All;
-
-    WGPUTexelCopyBufferInfo dstCopy = {};
-    dstCopy.buffer = m_readbackBuffer;
-    dstCopy.layout.offset = 0;
-    dstCopy.layout.bytesPerRow = bytesPerRow;
-    dstCopy.layout.rowsPerImage = srcHeight;
-
-    WGPUExtent3D copySize = {srcWidth, srcHeight, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(encoder, &srcCopy, &dstCopy, &copySize);
-
-    WGPUCommandBufferDescriptor cmdDesc = {};
-    WGPUCommandBuffer cmdBuffer = wgpuCommandEncoderFinish(encoder, &cmdDesc);
-    wgpuQueueSubmit(queue, 1, &cmdBuffer);
-    wgpuCommandBufferRelease(cmdBuffer);
-    wgpuCommandEncoderRelease(encoder);
-
-    // Wait for queue and map buffer
-    struct WorkDoneContext { std::atomic<bool> done{false}; } workCtx;
-    WGPUQueueWorkDoneCallbackInfo workDoneInfo = {};
-    workDoneInfo.mode = WGPUCallbackMode_AllowSpontaneous;
-    workDoneInfo.callback = [](WGPUQueueWorkDoneStatus, void* ud1, void*) {
-        static_cast<WorkDoneContext*>(ud1)->done = true;
-    };
-    workDoneInfo.userdata1 = &workCtx;
-    wgpuQueueOnSubmittedWorkDone(queue, workDoneInfo);
-
-    int workTimeout = 100;
-    while (!workCtx.done && workTimeout-- > 0) {
-        wgpuDevicePoll(device, false, nullptr);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    if (!workCtx.done) return false;
-
-    struct MapContext { std::atomic<bool> done{false}; WGPUMapAsyncStatus status; } mapCtx;
-    WGPUBufferMapCallbackInfo callbackInfo = {};
-    callbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
-    callbackInfo.callback = [](WGPUMapAsyncStatus status, WGPUStringView, void* ud1, void*) {
-        auto* ctx = static_cast<MapContext*>(ud1);
-        ctx->status = status;
-        ctx->done = true;
-    };
-    callbackInfo.userdata1 = &mapCtx;
-    wgpuBufferMapAsync(m_readbackBuffer, WGPUMapMode_Read, 0, requiredSize, callbackInfo);
-
-    int mapTimeout = 100;
-    while (!mapCtx.done && mapTimeout-- > 0) {
-        wgpuDevicePoll(device, false, nullptr);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    if (!mapCtx.done || mapCtx.status != WGPUMapAsyncStatus_Success) return false;
-
-    const uint8_t* pixelData = static_cast<const uint8_t*>(
-        wgpuBufferGetConstMappedRange(m_readbackBuffer, 0, requiredSize));
-    if (!pixelData) {
-        wgpuBufferUnmap(m_readbackBuffer);
+    // Use CPU pixel path (operators that support ML should provide cpuPixels)
+    auto pixels = m_inputOp->cpuPixels();
+    if (!pixels) {
+        std::cerr << "[ONNXModel] Input operator does not provide CPU pixels" << std::endl;
         return false;
     }
 
-    bool isBGRA = (srcFormat == WGPUTextureFormat_BGRA8Unorm ||
-                   srcFormat == WGPUTextureFormat_BGRA8UnormSrgb);
-
-    // Determine tensor format from shape (NHWC vs NCHW)
-    bool isNHWC = true;
-    int channels = 3;
-    if (tensor.shape.size() >= 4) {
-        if (tensor.shape[1] <= 4) {
-            isNHWC = false;
-            channels = static_cast<int>(tensor.shape[1]);
-        } else {
-            channels = static_cast<int>(tensor.shape[3]);
-        }
-    }
-
-    // Resize and convert to tensor using bilinear interpolation
-    float scaleX = static_cast<float>(srcWidth) / targetWidth;
-    float scaleY = static_cast<float>(srcHeight) / targetHeight;
-
-    for (int y = 0; y < targetHeight; y++) {
-        for (int x = 0; x < targetWidth; x++) {
-            float srcX = (x + 0.5f) * scaleX - 0.5f;
-            float srcY = (y + 0.5f) * scaleY - 0.5f;
-
-            int x0 = std::max(0, std::min(static_cast<int>(srcX), static_cast<int>(srcWidth) - 1));
-            int y0 = std::max(0, std::min(static_cast<int>(srcY), static_cast<int>(srcHeight) - 1));
-            int x1 = std::max(0, std::min(x0 + 1, static_cast<int>(srcWidth) - 1));
-            int y1 = std::max(0, std::min(y0 + 1, static_cast<int>(srcHeight) - 1));
-
-            float fx = srcX - std::floor(srcX);
-            float fy = srcY - std::floor(srcY);
-
-            auto getPixel = [&](int px, int py) -> std::array<float, 4> {
-                const uint8_t* p = pixelData + py * bytesPerRow + px * 4;
-                return {p[isBGRA ? 2 : 0] / 255.0f, p[1] / 255.0f,
-                        p[isBGRA ? 0 : 2] / 255.0f, p[3] / 255.0f};
-            };
-
-            auto p00 = getPixel(x0, y0), p10 = getPixel(x1, y0);
-            auto p01 = getPixel(x0, y1), p11 = getPixel(x1, y1);
-
-            std::array<float, 4> result;
-            for (int c = 0; c < 4; c++) {
-                float v0 = p00[c] * (1 - fx) + p10[c] * fx;
-                float v1 = p01[c] * (1 - fx) + p11[c] * fx;
-                result[c] = v0 * (1 - fy) + v1 * fy;
-            }
-
-            if (tensor.type == TensorType::UInt8) {
-                // Output uint8 values (0-255)
-                if (isNHWC) {
-                    size_t baseIdx = (y * targetWidth + x) * channels;
-                    for (int c = 0; c < channels && c < 4; c++)
-                        tensor.dataU8[baseIdx + c] = static_cast<uint8_t>(result[c] * 255.0f);
-                } else {
-                    size_t pixelIdx = y * targetWidth + x;
-                    for (int c = 0; c < channels && c < 4; c++)
-                        tensor.dataU8[c * targetWidth * targetHeight + pixelIdx] = static_cast<uint8_t>(result[c] * 255.0f);
-                }
-            } else if (tensor.type == TensorType::Int32) {
-                // Output int32 values (0-255)
-                if (isNHWC) {
-                    size_t baseIdx = (y * targetWidth + x) * channels;
-                    for (int c = 0; c < channels && c < 4; c++)
-                        tensor.dataI32[baseIdx + c] = static_cast<int32_t>(result[c] * 255.0f);
-                } else {
-                    size_t pixelIdx = y * targetWidth + x;
-                    for (int c = 0; c < channels && c < 4; c++)
-                        tensor.dataI32[c * targetWidth * targetHeight + pixelIdx] = static_cast<int32_t>(result[c] * 255.0f);
-                }
-            } else {
-                // Output float values (0-1 range - standard for many ONNX models)
-                if (isNHWC) {
-                    size_t baseIdx = (y * targetWidth + x) * channels;
-                    for (int c = 0; c < channels && c < 4; c++)
-                        tensor.data[baseIdx + c] = result[c];  // Already 0-1
-                } else {
-                    size_t pixelIdx = y * targetWidth + x;
-                    for (int c = 0; c < channels && c < 4; c++)
-                        tensor.data[c * targetWidth * targetHeight + pixelIdx] = result[c];
-                }
-            }
-        }
-    }
-
-    // Unmap GPU readback buffer
-    if (m_readbackBuffer) {
-        wgpuBufferUnmap(m_readbackBuffer);
-    }
-
-    return true;
+    return cpuPixelsToTensor(*pixels, tensor, targetWidth, targetHeight);
 }
 
 bool ONNXModel::cpuPixelsToTensor(const io::ImageData& pixels, Tensor& tensor,
