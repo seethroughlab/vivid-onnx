@@ -56,13 +56,16 @@ target_include_directories(test_vivid_ml PRIVATE
     ${VIVID_DEP_INCLUDE_DIRS}
 )
 
-# Copy ONNX Runtime DLL to test directory on Windows
+# Copy runtime DLLs to test directory on Windows
 if(WIN32)
     add_custom_command(TARGET test_vivid_ml POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${ONNXRUNTIME_DLL}"
             "$<TARGET_FILE_DIR:test_vivid_ml>"
-        COMMENT "Copying onnxruntime.dll to test directory"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:vivid-onnx>"
+            "$<TARGET_FILE_DIR:test_vivid_ml>"
+        COMMENT "Copying DLLs to test directory"
     )
 endif()
 
