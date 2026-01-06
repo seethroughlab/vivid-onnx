@@ -58,6 +58,15 @@ target_include_directories(test_vivid_ml PRIVATE
 
 # Copy runtime DLLs to test directory on Windows
 if(WIN32)
+    # Find vivid-core.dll in the SDK
+    if(DEFINED VIVID_ROOT)
+        if(EXISTS "${VIVID_ROOT}/bin/vivid-core.dll")
+            set(VIVID_CORE_DLL "${VIVID_ROOT}/bin/vivid-core.dll")
+        elseif(EXISTS "${VIVID_ROOT}/lib/vivid-core.dll")
+            set(VIVID_CORE_DLL "${VIVID_ROOT}/lib/vivid-core.dll")
+        endif()
+    endif()
+
     add_custom_command(TARGET test_vivid_ml POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${ONNXRUNTIME_DLL}"
@@ -67,6 +76,16 @@ if(WIN32)
             "$<TARGET_FILE_DIR:test_vivid_ml>"
         COMMENT "Copying DLLs to test directory"
     )
+
+    # Copy vivid-core.dll if found
+    if(VIVID_CORE_DLL)
+        add_custom_command(TARGET test_vivid_ml POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${VIVID_CORE_DLL}"
+                "$<TARGET_FILE_DIR:test_vivid_ml>"
+            COMMENT "Copying vivid-core.dll to test directory"
+        )
+    endif()
 endif()
 
 # Disable catch_discover_tests (crashes during build due to ONNX Runtime dylib path)

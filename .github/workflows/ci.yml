@@ -97,5 +97,16 @@ jobs:
           fi
           echo "Library built successfully!"
 
+      - name: List test directory (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "=== Test directory contents ==="
+          ls -la build/tests/Release/ || true
+          echo "=== vivid SDK bin contents ==="
+          ls -la "$VIVID_ROOT/bin/" || true
+          echo "=== vivid SDK lib contents ==="
+          ls -la "$VIVID_ROOT/lib/" || true
+
       - name: Run tests
         run: ctest --test-dir build --output-on-failure -C Release
