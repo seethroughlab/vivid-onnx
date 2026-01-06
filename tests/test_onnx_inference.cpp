@@ -21,6 +21,16 @@ static bool modelFileExists(const std::string& path) {
     return f.good();
 }
 
+// Helper to create Ort::Session with proper path type for each platform
+static Ort::Session createSession(Ort::Env& env, const std::string& path, Ort::SessionOptions& options) {
+#ifdef _WIN32
+    std::wstring wpath(path.begin(), path.end());
+    return Ort::Session(env, wpath.c_str(), options);
+#else
+    return Ort::Session(env, path.c_str(), options);
+#endif
+}
+
 TEST_CASE("ONNX Runtime loads and runs MoveNet", "[ml][onnx][integration]") {
     const std::string modelPath = "assets/models/movenet/singlepose-lightning.onnx";
 
@@ -36,12 +46,12 @@ TEST_CASE("ONNX Runtime loads and runs MoveNet", "[ml][onnx][integration]") {
 
     SECTION("model loads successfully") {
         REQUIRE_NOTHROW([&]() {
-            Ort::Session session(env, modelPath.c_str(), sessionOptions);
+            createSession(env, modelPath, sessionOptions);
         }());
     }
 
     SECTION("model has correct input/output shape") {
-        Ort::Session session(env, modelPath.c_str(), sessionOptions);
+        Ort::Session session = createSession(env, modelPath, sessionOptions);
         Ort::AllocatorWithDefaultOptions allocator;
 
         // Check input
@@ -86,7 +96,7 @@ TEST_CASE("ONNX Runtime loads and runs MoveNet", "[ml][onnx][integration]") {
     }
 
     SECTION("inference runs with dummy input") {
-        Ort::Session session(env, modelPath.c_str(), sessionOptions);
+        Ort::Session session = createSession(env, modelPath, sessionOptions);
         Ort::AllocatorWithDefaultOptions allocator;
         Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
