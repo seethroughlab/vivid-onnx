@@ -58,15 +58,6 @@ target_include_directories(test_vivid_ml PRIVATE
 
 # Copy runtime DLLs to test directory on Windows
 if(WIN32)
-    # Find vivid-core.dll in the SDK
-    if(DEFINED VIVID_ROOT)
-        if(EXISTS "${VIVID_ROOT}/bin/vivid-core.dll")
-            set(VIVID_CORE_DLL "${VIVID_ROOT}/bin/vivid-core.dll")
-        elseif(EXISTS "${VIVID_ROOT}/lib/vivid-core.dll")
-            set(VIVID_CORE_DLL "${VIVID_ROOT}/lib/vivid-core.dll")
-        endif()
-    endif()
-
     add_custom_command(TARGET test_vivid_ml POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${ONNXRUNTIME_DLL}"
@@ -77,14 +68,16 @@ if(WIN32)
         COMMENT "Copying DLLs to test directory"
     )
 
-    # Copy vivid-core.dll if found
-    if(VIVID_CORE_DLL)
-        add_custom_command(TARGET test_vivid_ml POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${VIVID_CORE_DLL}"
-                "$<TARGET_FILE_DIR:test_vivid_ml>"
-            COMMENT "Copying vivid-core.dll to test directory"
-        )
+    # Copy all DLLs from vivid SDK lib directory (vivid-core.dll, glfw3.dll, etc.)
+    if(DEFINED VIVID_ROOT AND EXISTS "${VIVID_ROOT}/lib")
+        file(GLOB VIVID_SDK_DLLS "${VIVID_ROOT}/lib/*.dll")
+        foreach(DLL_FILE ${VIVID_SDK_DLLS})
+            add_custom_command(TARGET test_vivid_ml POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${DLL_FILE}"
+                    "$<TARGET_FILE_DIR:test_vivid_ml>"
+            )
+        endforeach()
     endif()
 endif()
 
