@@ -33,9 +33,14 @@ jobs:
 
       - name: Download vivid release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p vivid-sdk
-          DOWNLOAD_URL="https://github.com/${{ env.VIVID_REPO }}/releases/latest/download/${{ matrix.vivid_archive }}"
+          # Get latest release (including pre-releases) via GitHub API
+          RELEASE_TAG=$(gh api repos/${{ env.VIVID_REPO }}/releases --jq '.[0].tag_name')
+          echo "Latest vivid release: $RELEASE_TAG"
+          DOWNLOAD_URL="https://github.com/${{ env.VIVID_REPO }}/releases/download/${RELEASE_TAG}/${{ matrix.vivid_archive }}"
           echo "Downloading vivid from: $DOWNLOAD_URL"
           curl -fL -o vivid-sdk/archive "$DOWNLOAD_URL"
 
