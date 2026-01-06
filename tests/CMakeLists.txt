@@ -41,6 +41,8 @@ endif()
 target_include_directories(test_vivid_ml PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${ONNXRUNTIME_INCLUDE_DIR}
+    ${VIVID_INCLUDE_DIR}
+    ${VIVID_DEP_INCLUDE_DIRS}
 )
 
 # Disable catch_discover_tests (crashes during build due to ONNX Runtime dylib path)

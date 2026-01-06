@@ -154,22 +154,6 @@ set(ML_SOURCES
 
 add_library(vivid-ml SHARED ${ML_SOURCES})
 
-# Output to lib/ for consistent directory structure (matches runtime expectations)
-set_target_properties(vivid-ml PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib
-)
-
-# Copy ONNX Runtime to lib/ for development (runtime needs it alongside vivid-ml)
-add_custom_command(TARGET vivid-ml POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${onnxruntime_SOURCE_DIR}/lib/libonnxruntime.${ONNXRUNTIME_VERSION}.dylib
-        ${CMAKE_SOURCE_DIR}/lib/
-    COMMAND ${CMAKE_COMMAND} -E create_symlink
-        libonnxruntime.${ONNXRUNTIME_VERSION}.dylib
-        ${CMAKE_SOURCE_DIR}/lib/libonnxruntime.dylib
-    COMMENT "Copying ONNX Runtime to lib/"
-)
-
 target_include_directories(vivid-ml
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -184,7 +168,8 @@ if(VIVID_BUILD_MODE STREQUAL "in-tree")
     target_link_libraries(vivid-ml PUBLIC vivid-core ${ONNXRUNTIME_LIB})
 elseif(VIVID_BUILD_MODE STREQUAL "standalone")
     # Standalone build - use headers only, resolve symbols at load time
-    target_include_directories(vivid-ml PUBLIC ${VIVID_INCLUDE_DIR} ${VIVID_DEP_INCLUDE_DIRS})
+    # Use PRIVATE since vivid headers are only needed for compiling vivid-ml, not by consumers
+    target_include_directories(vivid-ml PRIVATE ${VIVID_INCLUDE_DIR} ${VIVID_DEP_INCLUDE_DIRS})
     target_link_libraries(vivid-ml PUBLIC ${ONNXRUNTIME_LIB})
 
     if(WIN32)
