@@ -56,6 +56,16 @@ target_include_directories(test_vivid_ml PRIVATE
     ${VIVID_DEP_INCLUDE_DIRS}
 )
 
+# Copy ONNX Runtime DLL to test directory on Windows
+if(WIN32)
+    add_custom_command(TARGET test_vivid_ml POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ONNXRUNTIME_DLL}"
+            "$<TARGET_FILE_DIR:test_vivid_ml>"
+        COMMENT "Copying onnxruntime.dll to test directory"
+    )
+endif()
+
 # Disable catch_discover_tests (crashes during build due to ONNX Runtime dylib path)
 # Use add_test instead - run all tests as a single test case
 # Set working directory to source root so tests can find model files
