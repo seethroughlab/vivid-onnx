@@ -9,11 +9,6 @@
 #include <atomic>
 #include <cmath>
 
-// Optional: vivid-video integration for efficient CPU pixel access
-#ifdef VIVID_ML_HAS_VIDEO
-#include <vivid/video/webcam.h>
-using vivid::video::Webcam;
-#endif
 
 namespace vivid::ml {
 
@@ -292,125 +287,102 @@ bool ONNXModel::textureToTensor(Context& ctx, Tensor& tensor,
                                  int targetWidth, int targetHeight) {
     if (!m_inputOp) return false;
 
-    // Try to get CPU pixel data directly (more efficient than GPU readback)
-    const uint8_t* pixelData = nullptr;
-    uint32_t srcWidth = 0, srcHeight = 0;
-    uint32_t bytesPerRow = 0;
-    bool isBGRA = false;
-    bool usedWebcam = false;
+    // Get pixel data via GPU readback from input texture
+    WGPUTexture srcTexture = m_inputOp->outputTexture();
+    if (!srcTexture) return false;
 
-#ifdef VIVID_ML_HAS_VIDEO
-    // Check if input is a Webcam with CPU pixel access
-    if (auto* webcam = dynamic_cast<Webcam*>(m_inputOp)) {
-        pixelData = webcam->cpuPixelData();
-        if (pixelData && webcam->cpuPixelDataSize() > 0) {
-            srcWidth = static_cast<uint32_t>(webcam->captureWidth());
-            srcHeight = static_cast<uint32_t>(webcam->captureHeight());
-            bytesPerRow = srcWidth * 4;  // CPU buffer is packed RGBA
-            isBGRA = false;  // Webcam outputs RGBA after conversion
-            usedWebcam = true;
+    WGPUDevice device = ctx.device();
+    WGPUQueue queue = ctx.queue();
+
+    uint32_t srcWidth = wgpuTextureGetWidth(srcTexture);
+    uint32_t srcHeight = wgpuTextureGetHeight(srcTexture);
+    WGPUTextureFormat srcFormat = wgpuTextureGetFormat(srcTexture);
+
+    uint32_t bytesPerRow = (srcWidth * 4 + 255) & ~255;  // 256-byte aligned for GPU
+    size_t requiredSize = bytesPerRow * srcHeight;
+
+    // Create or resize readback buffer
+    if (!m_readbackBuffer || m_readbackBufferSize < requiredSize) {
+        if (m_readbackBuffer) {
+            wgpuBufferRelease(m_readbackBuffer);
         }
+        WGPUBufferDescriptor bufferDesc = {};
+        bufferDesc.size = requiredSize;
+        bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
+        bufferDesc.mappedAtCreation = false;
+        m_readbackBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
+        m_readbackBufferSize = requiredSize;
     }
-#endif
 
-    // If no CPU pixel data available, fall back to GPU readback
+    // Copy texture to buffer
+    WGPUCommandEncoderDescriptor encoderDesc = {};
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+
+    WGPUTexelCopyTextureInfo srcCopy = {};
+    srcCopy.texture = srcTexture;
+    srcCopy.mipLevel = 0;
+    srcCopy.origin = {0, 0, 0};
+    srcCopy.aspect = WGPUTextureAspect_All;
+
+    WGPUTexelCopyBufferInfo dstCopy = {};
+    dstCopy.buffer = m_readbackBuffer;
+    dstCopy.layout.offset = 0;
+    dstCopy.layout.bytesPerRow = bytesPerRow;
+    dstCopy.layout.rowsPerImage = srcHeight;
+
+    WGPUExtent3D copySize = {srcWidth, srcHeight, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(encoder, &srcCopy, &dstCopy, &copySize);
+
+    WGPUCommandBufferDescriptor cmdDesc = {};
+    WGPUCommandBuffer cmdBuffer = wgpuCommandEncoderFinish(encoder, &cmdDesc);
+    wgpuQueueSubmit(queue, 1, &cmdBuffer);
+    wgpuCommandBufferRelease(cmdBuffer);
+    wgpuCommandEncoderRelease(encoder);
+
+    // Wait for queue and map buffer
+    struct WorkDoneContext { std::atomic<bool> done{false}; } workCtx;
+    WGPUQueueWorkDoneCallbackInfo workDoneInfo = {};
+    workDoneInfo.mode = WGPUCallbackMode_AllowSpontaneous;
+    workDoneInfo.callback = [](WGPUQueueWorkDoneStatus, void* ud1, void*) {
+        static_cast<WorkDoneContext*>(ud1)->done = true;
+    };
+    workDoneInfo.userdata1 = &workCtx;
+    wgpuQueueOnSubmittedWorkDone(queue, workDoneInfo);
+
+    int workTimeout = 100;
+    while (!workCtx.done && workTimeout-- > 0) {
+        wgpuDevicePoll(device, false, nullptr);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    if (!workCtx.done) return false;
+
+    struct MapContext { std::atomic<bool> done{false}; WGPUMapAsyncStatus status; } mapCtx;
+    WGPUBufferMapCallbackInfo callbackInfo = {};
+    callbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
+    callbackInfo.callback = [](WGPUMapAsyncStatus status, WGPUStringView, void* ud1, void*) {
+        auto* ctx = static_cast<MapContext*>(ud1);
+        ctx->status = status;
+        ctx->done = true;
+    };
+    callbackInfo.userdata1 = &mapCtx;
+    wgpuBufferMapAsync(m_readbackBuffer, WGPUMapMode_Read, 0, requiredSize, callbackInfo);
+
+    int mapTimeout = 100;
+    while (!mapCtx.done && mapTimeout-- > 0) {
+        wgpuDevicePoll(device, false, nullptr);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    if (!mapCtx.done || mapCtx.status != WGPUMapAsyncStatus_Success) return false;
+
+    const uint8_t* pixelData = static_cast<const uint8_t*>(
+        wgpuBufferGetConstMappedRange(m_readbackBuffer, 0, requiredSize));
     if (!pixelData) {
-        WGPUTexture srcTexture = m_inputOp->outputTexture();
-        if (!srcTexture) return false;
-
-        WGPUDevice device = ctx.device();
-        WGPUQueue queue = ctx.queue();
-
-        srcWidth = wgpuTextureGetWidth(srcTexture);
-        srcHeight = wgpuTextureGetHeight(srcTexture);
-        WGPUTextureFormat srcFormat = wgpuTextureGetFormat(srcTexture);
-
-        bytesPerRow = (srcWidth * 4 + 255) & ~255;  // 256-byte aligned for GPU
-        size_t requiredSize = bytesPerRow * srcHeight;
-
-        // Create or resize readback buffer
-        if (!m_readbackBuffer || m_readbackBufferSize < requiredSize) {
-            if (m_readbackBuffer) {
-                wgpuBufferRelease(m_readbackBuffer);
-            }
-            WGPUBufferDescriptor bufferDesc = {};
-            bufferDesc.size = requiredSize;
-            bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
-            bufferDesc.mappedAtCreation = false;
-            m_readbackBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
-            m_readbackBufferSize = requiredSize;
-        }
-
-        // Copy texture to buffer
-        WGPUCommandEncoderDescriptor encoderDesc = {};
-        WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
-
-        WGPUTexelCopyTextureInfo srcCopy = {};
-        srcCopy.texture = srcTexture;
-        srcCopy.mipLevel = 0;
-        srcCopy.origin = {0, 0, 0};
-        srcCopy.aspect = WGPUTextureAspect_All;
-
-        WGPUTexelCopyBufferInfo dstCopy = {};
-        dstCopy.buffer = m_readbackBuffer;
-        dstCopy.layout.offset = 0;
-        dstCopy.layout.bytesPerRow = bytesPerRow;
-        dstCopy.layout.rowsPerImage = srcHeight;
-
-        WGPUExtent3D copySize = {srcWidth, srcHeight, 1};
-        wgpuCommandEncoderCopyTextureToBuffer(encoder, &srcCopy, &dstCopy, &copySize);
-
-        WGPUCommandBufferDescriptor cmdDesc = {};
-        WGPUCommandBuffer cmdBuffer = wgpuCommandEncoderFinish(encoder, &cmdDesc);
-        wgpuQueueSubmit(queue, 1, &cmdBuffer);
-        wgpuCommandBufferRelease(cmdBuffer);
-        wgpuCommandEncoderRelease(encoder);
-
-        // Wait for queue and map buffer
-        struct WorkDoneContext { std::atomic<bool> done{false}; } workCtx;
-        WGPUQueueWorkDoneCallbackInfo workDoneInfo = {};
-        workDoneInfo.mode = WGPUCallbackMode_AllowSpontaneous;
-        workDoneInfo.callback = [](WGPUQueueWorkDoneStatus, void* ud1, void*) {
-            static_cast<WorkDoneContext*>(ud1)->done = true;
-        };
-        workDoneInfo.userdata1 = &workCtx;
-        wgpuQueueOnSubmittedWorkDone(queue, workDoneInfo);
-
-        int workTimeout = 100;
-        while (!workCtx.done && workTimeout-- > 0) {
-            wgpuDevicePoll(device, false, nullptr);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-        if (!workCtx.done) return false;
-
-        struct MapContext { std::atomic<bool> done{false}; WGPUMapAsyncStatus status; } mapCtx;
-        WGPUBufferMapCallbackInfo callbackInfo = {};
-        callbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
-        callbackInfo.callback = [](WGPUMapAsyncStatus status, WGPUStringView, void* ud1, void*) {
-            auto* ctx = static_cast<MapContext*>(ud1);
-            ctx->status = status;
-            ctx->done = true;
-        };
-        callbackInfo.userdata1 = &mapCtx;
-        wgpuBufferMapAsync(m_readbackBuffer, WGPUMapMode_Read, 0, requiredSize, callbackInfo);
-
-        int mapTimeout = 100;
-        while (!mapCtx.done && mapTimeout-- > 0) {
-            wgpuDevicePoll(device, false, nullptr);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-        if (!mapCtx.done || mapCtx.status != WGPUMapAsyncStatus_Success) return false;
-
-        pixelData = static_cast<const uint8_t*>(
-            wgpuBufferGetConstMappedRange(m_readbackBuffer, 0, requiredSize));
-        if (!pixelData) {
-            wgpuBufferUnmap(m_readbackBuffer);
-            return false;
-        }
-
-        isBGRA = (srcFormat == WGPUTextureFormat_BGRA8Unorm ||
-                  srcFormat == WGPUTextureFormat_BGRA8UnormSrgb);
+        wgpuBufferUnmap(m_readbackBuffer);
+        return false;
     }
+
+    bool isBGRA = (srcFormat == WGPUTextureFormat_BGRA8Unorm ||
+                   srcFormat == WGPUTextureFormat_BGRA8UnormSrgb);
 
     // Determine tensor format from shape (NHWC vs NCHW)
     bool isNHWC = true;
@@ -494,8 +466,8 @@ bool ONNXModel::textureToTensor(Context& ctx, Tensor& tensor,
         }
     }
 
-    // Unmap GPU buffer if we used it (not when using Webcam CPU path)
-    if (m_readbackBuffer && !usedWebcam) {
+    // Unmap GPU readback buffer
+    if (m_readbackBuffer) {
         wgpuBufferUnmap(m_readbackBuffer);
     }
 

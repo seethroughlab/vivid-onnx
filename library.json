@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": "https://github.com/seethroughlab/vivid-ml",
   "vivid": ">=3.0.0",
-  "dependencies": ["vivid-video"],
+  "dependencies": [],
   "operators": [
     "ONNXModel",
     "PoseDetector"

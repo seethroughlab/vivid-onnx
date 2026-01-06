@@ -144,35 +144,6 @@ message(STATUS "[vivid-ml] ONNX Runtime include: ${ONNXRUNTIME_INCLUDE_DIR}")
 message(STATUS "[vivid-ml] ONNX Runtime lib: ${ONNXRUNTIME_LIB}")
 
 # -----------------------------------------------------------------------------
-# Optional: vivid-video for efficient CPU pixel access
-# -----------------------------------------------------------------------------
-option(VIVID_ML_WITH_VIDEO "Enable vivid-video integration for faster CPU pixel access" ON)
-
-if(VIVID_ML_WITH_VIDEO)
-    if(TARGET vivid-video)
-        set(VIVID_VIDEO_FOUND TRUE)
-        message(STATUS "[vivid-ml] vivid-video found (target)")
-    elseif(DEFINED VIVID_ROOT)
-        find_library(VIVID_VIDEO_LIB vivid-video PATHS "${VIVID_ROOT}/lib" QUIET)
-        if(VIVID_VIDEO_LIB)
-            set(VIVID_VIDEO_FOUND TRUE)
-            message(STATUS "[vivid-ml] vivid-video found: ${VIVID_VIDEO_LIB}")
-        endif()
-    else()
-        find_package(vivid-video QUIET)
-        if(vivid-video_FOUND)
-            set(VIVID_VIDEO_FOUND TRUE)
-            message(STATUS "[vivid-ml] vivid-video found via find_package")
-        endif()
-    endif()
-
-    if(NOT VIVID_VIDEO_FOUND)
-        message(STATUS "[vivid-ml] vivid-video not found - using GPU readback fallback")
-        set(VIVID_ML_WITH_VIDEO OFF)
-    endif()
-endif()
-
-# -----------------------------------------------------------------------------
 # Library target
 # -----------------------------------------------------------------------------
 set(ML_SOURCES
@@ -191,18 +162,10 @@ target_include_directories(vivid-ml
         ${ONNXRUNTIME_INCLUDE_DIR}
 )
 
-# Compile definitions
-if(VIVID_ML_WITH_VIDEO)
-    target_compile_definitions(vivid-ml PRIVATE VIVID_ML_HAS_VIDEO=1)
-endif()
-
 # Link dependencies based on build mode
 if(VIVID_BUILD_MODE STREQUAL "in-tree")
     # Building as part of main vivid repo - link directly
     target_link_libraries(vivid-ml PUBLIC vivid-core ${ONNXRUNTIME_LIB})
-    if(VIVID_ML_WITH_VIDEO AND TARGET vivid-video)
-        target_link_libraries(vivid-ml PUBLIC vivid-video)
-    endif()
 elseif(VIVID_BUILD_MODE STREQUAL "standalone")
     # Standalone build - use headers only, resolve symbols at load time
     target_include_directories(vivid-ml PUBLIC ${VIVID_INCLUDE_DIR} ${VIVID_DEP_INCLUDE_DIRS})
@@ -211,9 +174,6 @@ elseif(VIVID_BUILD_MODE STREQUAL "standalone")
     if(WIN32)
         # Windows requires import library for symbol resolution
         target_link_libraries(vivid-ml PUBLIC ${VIVID_CORE_LIB})
-        if(VIVID_ML_WITH_VIDEO AND VIVID_VIDEO_LIB)
-            target_link_libraries(vivid-ml PUBLIC ${VIVID_VIDEO_LIB})
-        endif()
     else()
         # macOS/Linux: symbols resolved at load time by vivid runtime
         if(APPLE)
@@ -222,17 +182,10 @@ elseif(VIVID_BUILD_MODE STREQUAL "standalone")
             # Linux: allow undefined symbols to be resolved at load time
             target_link_options(vivid-ml PRIVATE -Wl,--allow-shlib-undefined)
         endif()
-
-        if(VIVID_ML_WITH_VIDEO AND VIVID_VIDEO_LIB)
-            target_link_libraries(vivid-ml PUBLIC ${VIVID_VIDEO_LIB})
-        endif()
     endif()
 else()
     # Installed vivid (via find_package)
     target_link_libraries(vivid-ml PUBLIC vivid::core ${ONNXRUNTIME_LIB})
-    if(VIVID_ML_WITH_VIDEO)
-        target_link_libraries(vivid-ml PUBLIC vivid::video)
-    endif()
 endif()
 
 # -----------------------------------------------------------------------------
