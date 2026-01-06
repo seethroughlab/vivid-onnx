@@ -1,8 +1,8 @@
-# vivid-ml TODO
+# vivid-onnx TODO
 
 ## Architecture Decision
 
-**Keep vivid-ml as a separate repo** - not merged into vivid/addons.
+**Keep vivid-onnx as a separate repo** - not merged into vivid/addons.
 
 Rationale:
 - ONNX-based lightweight inference (pose, segmentation) and TensorRT-based diffusion are different subsystems

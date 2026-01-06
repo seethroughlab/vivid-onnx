@@ -1,4 +1,4 @@
-# vivid-ml Tests
+# vivid-onnx Tests
 # Unit tests for ML operators
 
 cmake_minimum_required(VERSION 3.16)
@@ -30,7 +30,7 @@ add_executable(test_vivid_ml
 
 target_link_libraries(test_vivid_ml PRIVATE
     Catch2::Catch2WithMain
-    vivid-ml
+    vivid-onnx
 )
 
 # Tests need vivid-core for OperatorRegistry symbols (addon uses -undefined dynamic_lookup)

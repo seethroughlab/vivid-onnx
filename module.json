@@ -1,10 +1,10 @@
 {
-  "name": "vivid-ml",
+  "name": "vivid-onnx",
   "version": "0.1.0-alpha.1",
   "description": "Machine learning inference for creative applications via ONNX Runtime",
   "author": "Vivid",
   "license": "MIT",
-  "repository": "https://github.com/seethroughlab/vivid-ml",
+  "repository": "https://github.com/seethroughlab/vivid-onnx",
   "vivid": ">=3.0.0",
   "dependencies": [],
   "operators": [
@@ -12,9 +12,9 @@
     "PoseDetector"
   ],
   "prebuilt": {
-    "darwin-arm64": "https://github.com/seethroughlab/vivid-ml/releases/download/${version}/vivid-ml-darwin-arm64.tar.gz",
-    "darwin-x64": "https://github.com/seethroughlab/vivid-ml/releases/download/${version}/vivid-ml-darwin-x64.tar.gz",
-    "linux-x64": "https://github.com/seethroughlab/vivid-ml/releases/download/${version}/vivid-ml-linux-x64.tar.gz",
-    "win32-x64": "https://github.com/seethroughlab/vivid-ml/releases/download/${version}/vivid-ml-win32-x64.zip"
+    "darwin-arm64": "https://github.com/seethroughlab/vivid-onnx/releases/download/${version}/vivid-onnx-darwin-arm64.tar.gz",
+    "darwin-x64": "https://github.com/seethroughlab/vivid-onnx/releases/download/${version}/vivid-onnx-darwin-x64.tar.gz",
+    "linux-x64": "https://github.com/seethroughlab/vivid-onnx/releases/download/${version}/vivid-onnx-linux-x64.tar.gz",
+    "win32-x64": "https://github.com/seethroughlab/vivid-onnx/releases/download/${version}/vivid-onnx-win32-x64.zip"
   }
 }

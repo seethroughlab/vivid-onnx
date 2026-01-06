@@ -87,13 +87,13 @@ jobs:
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             ls -la build/Release/
-            test -f build/Release/vivid-ml.dll || exit 1
+            test -f build/Release/vivid-onnx.dll || exit 1
           elif [ "${{ runner.os }}" = "macOS" ]; then
             ls -la build/
-            test -f build/libvivid-ml.dylib || exit 1
+            test -f build/libvivid-onnx.dylib || exit 1
           else
             ls -la build/
-            test -f build/libvivid-ml.so || exit 1
+            test -f build/libvivid-onnx.so || exit 1
           fi
           echo "Library built successfully!"
 

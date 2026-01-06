@@ -41,7 +41,7 @@ struct ONNXModel::OrtObjects {
     Ort::MemoryInfo memoryInfo{nullptr};
 
     OrtObjects() : memoryInfo(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)) {
-        env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "vivid-ml");
+        env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "vivid-onnx");
         sessionOptions = std::make_unique<Ort::SessionOptions>();
 
         // Enable optimizations

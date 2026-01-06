@@ -118,56 +118,56 @@ jobs:
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
-          mkdir -p package/vivid-ml-${{ matrix.target }}
-          mkdir -p package/vivid-ml-${{ matrix.target }}/lib
-          mkdir -p package/vivid-ml-${{ matrix.target }}/include
+          mkdir -p package/vivid-onnx-${{ matrix.target }}
+          mkdir -p package/vivid-onnx-${{ matrix.target }}/lib
+          mkdir -p package/vivid-onnx-${{ matrix.target }}/include
 
-          # Copy vivid-ml library
-          cp build/libvivid-ml.dylib package/vivid-ml-${{ matrix.target }}/lib/ 2>/dev/null || \
-          cp build/libvivid-ml.so package/vivid-ml-${{ matrix.target }}/lib/ 2>/dev/null || true
+          # Copy vivid-onnx library
+          cp build/libvivid-onnx.dylib package/vivid-onnx-${{ matrix.target }}/lib/ 2>/dev/null || \
+          cp build/libvivid-onnx.so package/vivid-onnx-${{ matrix.target }}/lib/ 2>/dev/null || true
 
           # Copy ONNX Runtime
-          cp build/_deps/onnxruntime-src/lib/*.dylib package/vivid-ml-${{ matrix.target }}/lib/ 2>/dev/null || \
-          cp build/_deps/onnxruntime-src/lib/*.so* package/vivid-ml-${{ matrix.target }}/lib/ 2>/dev/null || true
+          cp build/_deps/onnxruntime-src/lib/*.dylib package/vivid-onnx-${{ matrix.target }}/lib/ 2>/dev/null || \
+          cp build/_deps/onnxruntime-src/lib/*.so* package/vivid-onnx-${{ matrix.target }}/lib/ 2>/dev/null || true
 
           # Copy headers
-          cp -r include/* package/vivid-ml-${{ matrix.target }}/include/
+          cp -r include/* package/vivid-onnx-${{ matrix.target }}/include/
 
           # Copy library.json
-          cp library.json package/vivid-ml-${{ matrix.target }}/
+          cp library.json package/vivid-onnx-${{ matrix.target }}/
 
           # Create archive
           cd package
-          tar -czvf vivid-ml-${{ matrix.target }}.${{ matrix.archive_ext }} vivid-ml-${{ matrix.target }}
+          tar -czvf vivid-onnx-${{ matrix.target }}.${{ matrix.archive_ext }} vivid-onnx-${{ matrix.target }}
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path package/vivid-ml-${{ matrix.target }}/lib
-          New-Item -ItemType Directory -Force -Path package/vivid-ml-${{ matrix.target }}/include
+          New-Item -ItemType Directory -Force -Path package/vivid-onnx-${{ matrix.target }}/lib
+          New-Item -ItemType Directory -Force -Path package/vivid-onnx-${{ matrix.target }}/include
 
-          # Copy vivid-ml DLL and lib
-          Copy-Item build/Release/vivid-ml.dll package/vivid-ml-${{ matrix.target }}/lib/ -ErrorAction SilentlyContinue
-          Copy-Item build/Release/vivid-ml.lib package/vivid-ml-${{ matrix.target }}/lib/ -ErrorAction SilentlyContinue
+          # Copy vivid-onnx DLL and lib
+          Copy-Item build/Release/vivid-onnx.dll package/vivid-onnx-${{ matrix.target }}/lib/ -ErrorAction SilentlyContinue
+          Copy-Item build/Release/vivid-onnx.lib package/vivid-onnx-${{ matrix.target }}/lib/ -ErrorAction SilentlyContinue
 
           # Copy ONNX Runtime
-          Copy-Item build/_deps/onnxruntime-src/lib/*.dll package/vivid-ml-${{ matrix.target }}/lib/ -ErrorAction SilentlyContinue
+          Copy-Item build/_deps/onnxruntime-src/lib/*.dll package/vivid-onnx-${{ matrix.target }}/lib/ -ErrorAction SilentlyContinue
 
           # Copy headers
-          Copy-Item -Recurse include/* package/vivid-ml-${{ matrix.target }}/include/
+          Copy-Item -Recurse include/* package/vivid-onnx-${{ matrix.target }}/include/
 
           # Copy library.json
-          Copy-Item library.json package/vivid-ml-${{ matrix.target }}/
+          Copy-Item library.json package/vivid-onnx-${{ matrix.target }}/
 
           # Create archive
-          Compress-Archive -Path package/vivid-ml-${{ matrix.target }} -DestinationPath package/vivid-ml-${{ matrix.target }}.${{ matrix.archive_ext }}
+          Compress-Archive -Path package/vivid-onnx-${{ matrix.target }} -DestinationPath package/vivid-onnx-${{ matrix.target }}.${{ matrix.archive_ext }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vivid-ml-${{ matrix.target }}
-          path: package/vivid-ml-${{ matrix.target }}.${{ matrix.archive_ext }}
+          name: vivid-onnx-${{ matrix.target }}
+          path: package/vivid-onnx-${{ matrix.target }}.${{ matrix.archive_ext }}
 
   create-release:
     name: Create Release
@@ -196,7 +196,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: vivid-ml v${{ steps.version.outputs.VERSION }}
+          name: vivid-onnx v${{ steps.version.outputs.VERSION }}
           draft: false
           prerelease: ${{ contains(github.ref, '-') }}
           generate_release_notes: true

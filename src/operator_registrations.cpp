@@ -1,8 +1,8 @@
 /**
  * @file operator_registrations.cpp
- * @brief Static operator registrations for vivid-ml addon
+ * @brief Static operator registrations for vivid-onnx addon
  *
- * This file registers all vivid-ml operators with the global operator registry
+ * This file registers all vivid-onnx operators with the global operator registry
  * so they appear in `vivid operators --json` and the VS Code extension.
  */
 
@@ -13,9 +13,9 @@
 namespace vivid::ml {
 
 // Register ONNXModel - generic ONNX model inference operator
-REGISTER_ADDON_OPERATOR(ONNXModel, "ML", "Run ONNX model inference on input texture", true, "vivid-ml");
+REGISTER_ADDON_OPERATOR(ONNXModel, "ML", "Run ONNX model inference on input texture", true, "vivid-onnx");
 
 // Register PoseDetector - MoveNet body tracking
-REGISTER_ADDON_OPERATOR(PoseDetector, "ML", "Detect body poses using MoveNet model", true, "vivid-ml");
+REGISTER_ADDON_OPERATOR(PoseDetector, "ML", "Detect body poses using MoveNet model", true, "vivid-onnx");
 
 } // namespace vivid::ml

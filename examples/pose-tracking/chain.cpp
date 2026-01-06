@@ -3,8 +3,8 @@
 // with skeleton visualization overlay
 //
 // Requires MoveNet ONNX model. Model path options:
-//   - assets/models/movenet/singlepose-lightning.onnx (if running from vivid-ml dir)
-//   - ~/.vivid/modules/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx (if installed)
+//   - assets/models/movenet/singlepose-lightning.onnx (if running from vivid-onnx dir)
+//   - ~/.vivid/modules/vivid-onnx/src/assets/models/movenet/singlepose-lightning.onnx (if installed)
 // From PINTO_model_zoo: https://github.com/PINTO0309/PINTO_model_zoo/tree/main/115_MoveNet
 
 #include <vivid/vivid.h>
@@ -71,7 +71,7 @@ void setup(Context& ctx) {
     pose.input(&webcam);
     // Model path - expand ~ to home directory
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
-    pose.model(home + "/.vivid/modules/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx");
+    pose.model(home + "/.vivid/modules/vivid-onnx/src/assets/models/movenet/singlepose-lightning.onnx");
     pose.confidenceThreshold(0.05f);
 
     // Canvas overlay for skeleton visualization

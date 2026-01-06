@@ -9,7 +9,7 @@ Machine Learning library for Vivid using ONNX Runtime.
 cmake -B build -DVIVID_ADDON_ML=ON && cmake --build build
 
 # Build standalone (for development)
-cd vivid-ml
+cd vivid-onnx
 cmake -B build -DVIVID_ROOT=/path/to/vivid && cmake --build build
 ```
 
@@ -70,7 +70,7 @@ void setup(Context& ctx) {
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
     auto& pose = chain.add<PoseDetector>("pose");
     pose.input(&cam);
-    pose.model(home + "/.vivid/modules/vivid-ml/src/assets/models/movenet/singlepose-lightning.onnx");
+    pose.model(home + "/.vivid/modules/vivid-onnx/src/assets/models/movenet/singlepose-lightning.onnx");
 
     // Canvas for skeleton overlay
     auto& canvas = chain.add<Canvas>("skeleton");
