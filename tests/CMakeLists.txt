@@ -33,9 +33,20 @@ target_link_libraries(test_vivid_ml PRIVATE
     vivid-onnx
 )
 
-# Tests need vivid-core for OperatorRegistry symbols (addon uses -undefined dynamic_lookup)
-if(DEFINED VIVID_ROOT AND EXISTS "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
-    target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
+# Tests need vivid-core for symbol resolution (addon uses -undefined dynamic_lookup)
+if(DEFINED VIVID_ROOT)
+    # Check SDK layout first, then source tree layout
+    if(EXISTS "${VIVID_ROOT}/lib/libvivid-core.dylib")
+        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/lib/libvivid-core.dylib")
+    elseif(EXISTS "${VIVID_ROOT}/lib/libvivid-core.so")
+        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/lib/libvivid-core.so")
+    elseif(EXISTS "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
+        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
+    elseif(EXISTS "${VIVID_ROOT}/build/lib/libvivid-core.so")
+        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/build/lib/libvivid-core.so")
+    elseif(WIN32 AND DEFINED VIVID_CORE_LIB)
+        target_link_libraries(test_vivid_ml PRIVATE ${VIVID_CORE_LIB})
+    endif()
 endif()
 
 target_include_directories(test_vivid_ml PRIVATE
