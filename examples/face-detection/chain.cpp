@@ -17,10 +17,7 @@
 #include <vivid/onnx/onnx.h>
 #include <vivid/effects/effects.h>
 #include <cmath>
-#include <cstdlib>
 #include <iostream>
-#include <fstream>
-#include <vector>
 
 using namespace vivid;
 using namespace vivid::video;
@@ -67,36 +64,7 @@ void setup(Context& ctx) {
     // Face detector using BlazeFace
     auto& faces = chain.add<FaceDetector>("faces");
     faces.input(&video);
-
-    // Model path - try multiple locations (installed module, dev, relative)
-    std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
-    std::vector<std::string> modelPaths = {
-        // Installed module (vivid modules install)
-        home + "/.vivid/modules/vivid-onnx/assets/models/blazeface/face_detection_front_128x128_float32.onnx",
-        // Development: direct path to vivid-onnx repo
-        home + "/Developer/vivid-onnx/assets/models/blazeface/face_detection_front_128x128_float32.onnx",
-        // Relative to example directory (when running from within module)
-        "../../assets/models/blazeface/face_detection_front_128x128_float32.onnx",
-    };
-
-    std::string modelPath;
-    for (const auto& path : modelPaths) {
-        std::ifstream f(path);
-        if (f.good()) {
-            modelPath = path;
-            break;
-        }
-    }
-
-    if (modelPath.empty()) {
-        std::cerr << "ERROR: Could not find BlazeFace model. Tried:" << std::endl;
-        for (const auto& path : modelPaths) {
-            std::cerr << "  - " << path << std::endl;
-        }
-        modelPath = modelPaths[0];
-    }
-
-    faces.model(modelPath);
+    faces.model("models:blazeface/face_detection_front_128x128_float32.onnx");
     faces.confidenceThreshold(0.20f);  // Tuned for BlazeFace ONNX model
     faces.maxFaces(5);
 
@@ -114,7 +82,7 @@ void setup(Context& ctx) {
 
     std::cout << "Face Detection Example" << std::endl;
     std::cout << "======================" << std::endl;
-    std::cout << "Model: " << modelPath << std::endl;
+    std::cout << "Model: BlazeFace 128x128" << std::endl;
     std::cout << "Detecting up to 5 faces with landmarks" << std::endl;
 }
 

@@ -35,17 +35,41 @@ target_link_libraries(test_vivid_ml PRIVATE
 
 # Tests need vivid-core for symbol resolution (addon uses -undefined dynamic_lookup)
 if(DEFINED VIVID_ROOT)
+    # Find vivid-core library
+    set(VIVID_CORE_FOUND FALSE)
+
     # Check SDK layout first, then source tree layout
     if(EXISTS "${VIVID_ROOT}/lib/libvivid-core.dylib")
-        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/lib/libvivid-core.dylib")
+        set(VIVID_CORE_LIBRARY "${VIVID_ROOT}/lib/libvivid-core.dylib")
+        set(VIVID_CORE_FOUND TRUE)
     elseif(EXISTS "${VIVID_ROOT}/lib/libvivid-core.so")
-        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/lib/libvivid-core.so")
+        set(VIVID_CORE_LIBRARY "${VIVID_ROOT}/lib/libvivid-core.so")
+        set(VIVID_CORE_FOUND TRUE)
     elseif(EXISTS "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
-        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
+        set(VIVID_CORE_LIBRARY "${VIVID_ROOT}/build/lib/libvivid-core.dylib")
+        set(VIVID_CORE_FOUND TRUE)
     elseif(EXISTS "${VIVID_ROOT}/build/lib/libvivid-core.so")
-        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_ROOT}/build/lib/libvivid-core.so")
+        set(VIVID_CORE_LIBRARY "${VIVID_ROOT}/build/lib/libvivid-core.so")
+        set(VIVID_CORE_FOUND TRUE)
     elseif(WIN32 AND DEFINED VIVID_CORE_LIB)
-        target_link_libraries(test_vivid_ml PRIVATE ${VIVID_CORE_LIB})
+        set(VIVID_CORE_LIBRARY "${VIVID_CORE_LIB}")
+        set(VIVID_CORE_FOUND TRUE)
+    endif()
+
+    if(VIVID_CORE_FOUND)
+        message(STATUS "[vivid-onnx tests] Found vivid-core: ${VIVID_CORE_LIBRARY}")
+        target_link_libraries(test_vivid_ml PRIVATE "${VIVID_CORE_LIBRARY}")
+
+        # Set rpath so test can find vivid-core at runtime
+        if(APPLE)
+            get_filename_component(VIVID_CORE_DIR "${VIVID_CORE_LIBRARY}" DIRECTORY)
+            set_target_properties(test_vivid_ml PROPERTIES
+                BUILD_RPATH "${VIVID_CORE_DIR}"
+                INSTALL_RPATH "${VIVID_CORE_DIR}"
+            )
+        endif()
+    else()
+        message(WARNING "[vivid-onnx tests] vivid-core not found - tests may fail at runtime")
     endif()
 endif()
 

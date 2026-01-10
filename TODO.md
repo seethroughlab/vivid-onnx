@@ -20,6 +20,23 @@ Rationale:
 - [x] CPU inference stable
 - [ ] GPU acceleration (CoreML/DirectML/CUDA) - stubbed but not active
 
+### Asset Management
+
+- [x] onnx pose-tracking example: `std::vector<std::string> modelPaths` isn't great. Need a better way to reference assets.
+  - Now uses `AssetLoader` with `models:` prefix (e.g., `pose.model("models:movenet/singlepose-lightning.onnx")`)
+
+### FaceDetector Improvements
+
+- [ ] Aspect ratio handling: Video is 16:9 but model expects 1:1, causing distortion
+  - Option 1: Letterbox input (pad to square, track padding for coordinate adjustment)
+  - Option 2: Allow user to specify aspect ratio mode (stretch, fit, fill)
+- [ ] False positives: Model occasionally detects non-face regions
+  - Could improve with higher confidence threshold (currently 0.20)
+  - NMS (non-max suppression) IoU threshold could be tuned (currently 0.3)
+- [ ] BlazeFace scores are generally lower than expected (max ~0.30 vs typical 0.75+)
+  - May be model-specific (PINTO converted model vs original TFLite)
+  - Consider trying back camera model or different BlazeFace variant
+
 ---
 
 ## Phase 2: TensorRT Integration (Real-Time Diffusion)

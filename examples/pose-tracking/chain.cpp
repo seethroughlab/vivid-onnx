@@ -17,10 +17,7 @@
 #include <vivid/onnx/onnx.h>
 #include <vivid/effects/effects.h>
 #include <cmath>
-#include <cstdlib>
 #include <iostream>
-#include <fstream>
-#include <vector>
 
 using namespace vivid;
 using namespace vivid::video;
@@ -73,36 +70,7 @@ void setup(Context& ctx) {
     // Pose detector using MoveNet SinglePose Lightning
     auto& pose = chain.add<PoseDetector>("pose");
     pose.input(&video);
-
-    // Model path - try multiple locations (installed module, dev, relative)
-    std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
-    std::vector<std::string> modelPaths = {
-        // Installed module (vivid modules install)
-        home + "/.vivid/modules/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx",
-        // Development: direct path to vivid-onnx repo
-        home + "/Developer/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx",
-        // Relative to example directory (when running from within module)
-        "../../assets/models/movenet/singlepose-lightning.onnx",
-    };
-
-    std::string modelPath;
-    for (const auto& path : modelPaths) {
-        std::ifstream f(path);
-        if (f.good()) {
-            modelPath = path;
-            break;
-        }
-    }
-
-    if (modelPath.empty()) {
-        std::cerr << "ERROR: Could not find MoveNet model. Tried:" << std::endl;
-        for (const auto& path : modelPaths) {
-            std::cerr << "  - " << path << std::endl;
-        }
-        modelPath = modelPaths[0]; // Use first path anyway, will fail gracefully
-    }
-
-    pose.model(modelPath);
+    pose.model("models:movenet/singlepose-lightning.onnx");
     pose.confidenceThreshold(0.3f);
 
     // Canvas overlay for skeleton visualization
@@ -119,7 +87,7 @@ void setup(Context& ctx) {
 
     std::cout << "Pose Tracking Example" << std::endl;
     std::cout << "=====================" << std::endl;
-    std::cout << "Model: " << modelPath << std::endl;
+    std::cout << "Model: MoveNet SinglePose Lightning" << std::endl;
     std::cout << "Skeleton overlay shows detected body pose" << std::endl;
 }
 

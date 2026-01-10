@@ -5,6 +5,18 @@ All notable changes to vivid-onnx will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.3] - 2026-01-10
+
+### Changed
+
+- Model paths now use `AssetLoader` with `models:` prefix (e.g., `pose.model("models:movenet/singlepose-lightning.onnx")`)
+- Removed hardcoded `~/.vivid` paths - now resolves relative to vivid executable
+- Simplified examples by removing manual path fallback logic (~30 lines → 1 line)
+
+### Fixed
+
+- CI build failure on Linux: Added nlohmann/json fetch for SDK builds (not included in vivid SDK package)
+
 ## [0.1.0-alpha.2] - 2026-01-10
 
 ### Changed

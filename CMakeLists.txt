@@ -38,6 +38,7 @@ elseif(DEFINED VIVID_ROOT)
         # SDK package layout - all headers bundled in include/
         set(VIVID_INCLUDE_DIR "${VIVID_ROOT}/include")
         set(VIVID_DEP_INCLUDE_DIRS "${VIVID_ROOT}/include")  # GLM, GLFW, WebGPU all in include/
+        set(VIVID_SDK_BUILD TRUE)
     elseif(EXISTS "${VIVID_ROOT}/modules/vivid-core/include/vivid/vivid.h")
         # Source tree layout - headers spread across build/_deps
         set(VIVID_INCLUDE_DIR "${VIVID_ROOT}/modules/vivid-core/include")
@@ -151,6 +152,22 @@ message(STATUS "[vivid-onnx] ONNX Runtime include: ${ONNXRUNTIME_INCLUDE_DIR}")
 message(STATUS "[vivid-onnx] ONNX Runtime lib: ${ONNXRUNTIME_LIB}")
 
 # -----------------------------------------------------------------------------
+# nlohmann/json (required by vivid operator_registry.h, not included in SDK)
+# -----------------------------------------------------------------------------
+if(VIVID_SDK_BUILD)
+    # SDK builds don't include nlohmann/json headers, so fetch them
+    FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+    set(NLOHMANN_JSON_INCLUDE_DIR "${nlohmann_json_SOURCE_DIR}/include")
+    message(STATUS "[vivid-onnx] Fetched nlohmann/json: ${NLOHMANN_JSON_INCLUDE_DIR}")
+endif()
+
+# -----------------------------------------------------------------------------
 # Library target
 # -----------------------------------------------------------------------------
 set(ML_SOURCES
@@ -178,6 +195,9 @@ elseif(VIVID_BUILD_MODE STREQUAL "standalone")
     # Standalone build - use headers only, resolve symbols at load time
     # Use PRIVATE since vivid headers are only needed for compiling vivid-onnx, not by consumers
     target_include_directories(vivid-onnx PRIVATE ${VIVID_INCLUDE_DIR} ${VIVID_DEP_INCLUDE_DIRS})
+    if(VIVID_SDK_BUILD AND NLOHMANN_JSON_INCLUDE_DIR)
+        target_include_directories(vivid-onnx PRIVATE ${NLOHMANN_JSON_INCLUDE_DIR})
+    endif()
     target_link_libraries(vivid-onnx PUBLIC ${ONNXRUNTIME_LIB})
 
     if(WIN32)
