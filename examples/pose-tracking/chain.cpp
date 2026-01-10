@@ -2,10 +2,12 @@
 // Demonstrates body pose detection using MoveNet via ONNX Runtime
 // with skeleton visualization overlay
 //
-// Requires MoveNet ONNX model. Model path options:
-//   - assets/models/movenet/singlepose-lightning.onnx (if running from vivid-onnx dir)
-//   - ~/.vivid/modules/vivid-onnx/src/assets/models/movenet/singlepose-lightning.onnx (if installed)
-// From PINTO_model_zoo: https://github.com/PINTO0309/PINTO_model_zoo/tree/main/115_MoveNet
+// Usage:
+//   - With webcam: ./vivid modules/vivid-onnx/examples/pose-tracking
+//   - With video:  ./vivid modules/vivid-onnx/examples/pose-tracking --video path/to/video.mp4
+//
+// Model: MoveNet SinglePose Lightning from PINTO_model_zoo
+// https://github.com/PINTO0309/PINTO_model_zoo/tree/main/115_MoveNet
 
 #include <vivid/vivid.h>
 #include <vivid/video/video.h>
@@ -42,45 +44,39 @@ glm::vec4 getConnectionColor(Keypoint from, Keypoint to) {
     int f = static_cast<int>(from);
     int t = static_cast<int>(to);
 
-    // Face (0-4)
     if (f <= 4 && t <= 4) return COLOR_FACE;
-    // Left arm (5, 7, 9)
     if ((f == 5 || f == 7 || f == 9) && (t == 5 || t == 7 || t == 9)) return COLOR_ARM_L;
-    // Right arm (6, 8, 10)
     if ((f == 6 || f == 8 || f == 10) && (t == 6 || t == 8 || t == 10)) return COLOR_ARM_R;
-    // Left leg (11, 13, 15)
     if ((f == 11 || f == 13 || f == 15) && (t == 11 || t == 13 || t == 15)) return COLOR_LEG_L;
-    // Right leg (12, 14, 16)
     if ((f == 12 || f == 14 || f == 16) && (t == 12 || t == 14 || t == 16)) return COLOR_LEG_R;
-    // Torso (shoulders and hips)
     return COLOR_TORSO;
 }
 
 void setup(Context& ctx) {
     auto& chain = ctx.chain();
 
-    // Webcam input (pose detection source)
-    auto& webcam = chain.add<Webcam>("webcam");
-    webcam.setResolution(1280, 720);
-    webcam.setFrameRate(30);
+    // Video input - use webcam by default
+    auto& cam = chain.add<Webcam>("source");
+    cam.setResolution(1280, 720);
+    cam.setFrameRate(30);
 
     // Pose detector using MoveNet SinglePose Lightning
-    // From PINTO_model_zoo - float32 ONNX, expects 0-1 normalized input
-    // Uses cpuPixels() from Webcam for efficient inference (no GPU readback)
     auto& pose = chain.add<PoseDetector>("pose");
-    pose.input(&webcam);
-    // Model path - expand ~ to home directory
+    pose.input(&cam);
+
+    // Model path - look in module assets directory
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
-    pose.model(home + "/.vivid/modules/vivid-onnx/src/assets/models/movenet/singlepose-lightning.onnx");
-    pose.confidenceThreshold(0.05f);
+    std::string modelPath = home + "/.vivid/modules/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx";
+    pose.model(modelPath);
+    pose.confidenceThreshold(0.1f);
 
     // Canvas overlay for skeleton visualization
     auto& canvas = chain.add<Canvas>("skeleton");
     canvas.size(1280, 720);
 
-    // Composite webcam and skeleton overlay
+    // Composite video and skeleton overlay
     auto& comp = chain.add<Composite>("output");
-    comp.input(0, "webcam");
+    comp.input(0, "source");
     comp.input(1, "skeleton");
     comp.mode(BlendMode::Over);
 
@@ -88,6 +84,7 @@ void setup(Context& ctx) {
 
     std::cout << "Pose Tracking Example" << std::endl;
     std::cout << "=====================" << std::endl;
+    std::cout << "Model: " << modelPath << std::endl;
     std::cout << "Skeleton overlay shows detected body pose" << std::endl;
 }
 
@@ -96,45 +93,36 @@ void update(Context& ctx) {
     auto& pose = chain.get<PoseDetector>("pose");
     auto& canvas = chain.get<Canvas>("skeleton");
 
-    // Canvas dimensions
     const float width = 1280.0f;
     const float height = 720.0f;
     const float lineWidth = 4.0f;
     const float pointRadius = 8.0f;
-    const float minConfidence = 0.03f;  // Min confidence to draw
+    const float minConfidence = 0.1f;
 
-    // Clear canvas with transparent background
     canvas.clear(0, 0, 0, 0);
 
     if (pose.detected()) {
-        // Set line style for skeleton
         canvas.lineWidth(lineWidth);
         canvas.lineCap(LineCap::Round);
 
-        // Draw skeleton lines using SKELETON_CONNECTIONS from pose_detector.h
+        // Draw skeleton lines
         for (const auto& bone : ml::SKELETON_CONNECTIONS) {
             float conf1 = pose.confidence(bone.from);
             float conf2 = pose.confidence(bone.to);
 
-            // Only draw if both keypoints have sufficient confidence
             if (conf1 >= minConfidence && conf2 >= minConfidence) {
                 glm::vec2 p1 = pose.keypoint(bone.from);
                 glm::vec2 p2 = pose.keypoint(bone.to);
 
-                // Convert normalized coords to pixel coords
                 float x1 = p1.x * width;
                 float y1 = p1.y * height;
                 float x2 = p2.x * width;
                 float y2 = p2.y * height;
 
-                // Get color based on body part
                 glm::vec4 color = getConnectionColor(bone.from, bone.to);
-
-                // Fade based on average confidence
                 float avgConf = (conf1 + conf2) * 0.5f;
-                color.a = std::min(1.0f, avgConf * 10.0f);  // Scale up low confidence
+                color.a = std::min(1.0f, avgConf * 2.0f);
 
-                // Draw line using path API
                 canvas.strokeStyle(color.r, color.g, color.b, color.a);
                 canvas.beginPath();
                 canvas.moveTo(x1, y1);
@@ -154,15 +142,13 @@ void update(Context& ctx) {
                 float y = p.y * height;
 
                 glm::vec4 color = getKeypointColor(kp);
-                color.a = std::min(1.0f, conf * 10.0f);
+                color.a = std::min(1.0f, conf * 2.0f);
 
-                // Draw filled circle using arc
                 canvas.fillStyle(color.r, color.g, color.b, color.a);
                 canvas.beginPath();
                 canvas.arc(x, y, pointRadius, 0, 2.0f * 3.14159f);
                 canvas.fill();
 
-                // Draw outline
                 canvas.strokeStyle(1, 1, 1, color.a * 0.8f);
                 canvas.lineWidth(2.0f);
                 canvas.stroke();

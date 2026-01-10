@@ -38,6 +38,7 @@ public:
 
 **Specialized Operators:**
 - [x] PoseDetector - MoveNet skeleton tracking
+- [x] FaceDetector - BlazeFace face detection (6 landmarks)
 - [ ] SegmentMask - Background/person segmentation
 - [ ] StyleTransfer - Neural style transfer
 - [ ] DepthEstimate - Monocular depth estimation

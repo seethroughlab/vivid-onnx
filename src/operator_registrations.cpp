@@ -9,13 +9,18 @@
 #include <vivid/operator_registry.h>
 #include <vivid/ml/onnx_model.h>
 #include <vivid/ml/pose_detector.h>
+#include <vivid/ml/face_detector.h>
 
-namespace vivid::ml {
+// Use type aliases to match REGISTER_OPERATOR macro pattern
+using MLONNXModel = vivid::ml::ONNXModel;
+using MLPoseDetector = vivid::ml::PoseDetector;
+using MLFaceDetector = vivid::ml::FaceDetector;
 
 // Register ONNXModel - generic ONNX model inference operator
-REGISTER_ADDON_OPERATOR(ONNXModel, "ML", "Run ONNX model inference on input texture", true, "vivid-onnx");
+REGISTER_OPERATOR(MLONNXModel, "ML", "Run ONNX model inference on input texture", true);
 
 // Register PoseDetector - MoveNet body tracking
-REGISTER_ADDON_OPERATOR(PoseDetector, "ML", "Detect body poses using MoveNet model", true, "vivid-onnx");
+REGISTER_OPERATOR(MLPoseDetector, "ML", "Detect body poses using MoveNet model", true);
 
-} // namespace vivid::ml
+// Register FaceDetector - BlazeFace face detection
+REGISTER_OPERATOR(MLFaceDetector, "ML", "Detect faces using BlazeFace model", true);

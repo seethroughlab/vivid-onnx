@@ -18,6 +18,7 @@ vivid modules install https://github.com/seethroughlab/vivid-onnx
 |----------|-------------|
 | `ONNXModel` | Generic ONNX model inference |
 | `PoseDetector` | Body pose detection using MoveNet |
+| `FaceDetector` | Face detection using BlazeFace |
 
 ## Included Models
 
@@ -27,8 +28,9 @@ The addon includes pre-trained models in `assets/models/`:
 |-------|------|-------------|
 | MoveNet SinglePose Lightning | `movenet/singlepose-lightning.onnx` | Fast single-person pose (9MB) |
 | MoveNet MultiPose Lightning | `movenet/multipose-lightning.onnx` | Multi-person pose (19MB) |
+| BlazeFace Front | `blazeface/face_detection_front_128x128_float32.onnx` | Fast face detection (423KB) |
 
-Models from [PINTO_model_zoo](https://github.com/PINTO0309/PINTO_model_zoo/tree/main/115_MoveNet).
+Models from [PINTO_model_zoo](https://github.com/PINTO0309/PINTO_model_zoo).
 
 ## Examples
 
@@ -113,6 +115,17 @@ VIVID_CHAIN(setup, update)
 | 13-14 | Left/Right Knee |
 | 15-16 | Left/Right Ankle |
 
+## Face Landmarks (BlazeFace)
+
+| Index | Landmark |
+|-------|----------|
+| 0 | Right Eye |
+| 1 | Left Eye |
+| 2 | Nose |
+| 3 | Mouth |
+| 4 | Right Ear |
+| 5 | Left Ear |
+
 ## API Reference
 
 See [LLM-REFERENCE.md](../../docs/LLM-REFERENCE.md) for complete operator documentation.
@@ -126,4 +139,4 @@ See [LLM-REFERENCE.md](../../docs/LLM-REFERENCE.md) for complete operator docume
 ## License
 
 MIT (addon code)
-Apache 2.0 (MoveNet models)
+Apache 2.0 (MoveNet and BlazeFace models from [PINTO_model_zoo](https://github.com/PINTO0309/PINTO_model_zoo))

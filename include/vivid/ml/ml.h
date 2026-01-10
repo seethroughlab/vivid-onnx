@@ -4,6 +4,7 @@
 // Operators:
 //   ONNXModel     - Generic ONNX model inference
 //   PoseDetector  - MoveNet body tracking (17 keypoints)
+//   FaceDetector  - BlazeFace face detection (6 landmarks)
 //
 // Usage:
 //   #include <vivid/ml/ml.h>
@@ -13,3 +14,4 @@
 
 #include "onnx_model.h"
 #include "pose_detector.h"
+#include "face_detector.h"

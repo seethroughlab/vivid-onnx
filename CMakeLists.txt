@@ -33,14 +33,14 @@ elseif(DEFINED VIVID_ROOT)
     # Standalone build with SDK path or source tree
     message(STATUS "[vivid-onnx] Using VIVID_ROOT: ${VIVID_ROOT}")
 
-    # Check for SDK layout (include/vivid) or source tree layout (src/vivid-core/include/vivid)
+    # Check for SDK layout (include/vivid) or source tree layout (modules/vivid-core/include/vivid)
     if(EXISTS "${VIVID_ROOT}/include/vivid/vivid.h")
         # SDK package layout - all headers bundled in include/
         set(VIVID_INCLUDE_DIR "${VIVID_ROOT}/include")
         set(VIVID_DEP_INCLUDE_DIRS "${VIVID_ROOT}/include")  # GLM, GLFW, WebGPU all in include/
-    elseif(EXISTS "${VIVID_ROOT}/src/vivid-core/include/vivid/vivid.h")
+    elseif(EXISTS "${VIVID_ROOT}/modules/vivid-core/include/vivid/vivid.h")
         # Source tree layout - headers spread across build/_deps
-        set(VIVID_INCLUDE_DIR "${VIVID_ROOT}/src/vivid-core/include")
+        set(VIVID_INCLUDE_DIR "${VIVID_ROOT}/modules/vivid-core/include")
 
         # Find dependency headers in build/_deps
         set(VIVID_DEP_INCLUDE_DIRS "")
@@ -66,10 +66,17 @@ elseif(DEFINED VIVID_ROOT)
         else()
             message(FATAL_ERROR "[vivid-onnx] GLFW headers not found. Please build vivid first.")
         endif()
+
+        # nlohmann_json
+        if(EXISTS "${VIVID_ROOT}/build/_deps/nlohmann_json-src/include/nlohmann/json.hpp")
+            list(APPEND VIVID_DEP_INCLUDE_DIRS "${VIVID_ROOT}/build/_deps/nlohmann_json-src/include")
+        else()
+            message(FATAL_ERROR "[vivid-onnx] nlohmann_json headers not found. Please build vivid first.")
+        endif()
     else()
         message(FATAL_ERROR "[vivid-onnx] VIVID_ROOT specified but headers not found.\n"
             "  Checked: ${VIVID_ROOT}/include/vivid/vivid.h\n"
-            "  Checked: ${VIVID_ROOT}/src/vivid-core/include/vivid/vivid.h")
+            "  Checked: ${VIVID_ROOT}/modules/vivid-core/include/vivid/vivid.h")
     endif()
     message(STATUS "[vivid-onnx] Found vivid headers at: ${VIVID_INCLUDE_DIR}")
     message(STATUS "[vivid-onnx] Dependency include dirs: ${VIVID_DEP_INCLUDE_DIRS}")
@@ -149,6 +156,7 @@ message(STATUS "[vivid-onnx] ONNX Runtime lib: ${ONNXRUNTIME_LIB}")
 set(ML_SOURCES
     src/onnx_model.cpp
     src/pose_detector.cpp
+    src/face_detector.cpp
     src/operator_registrations.cpp
 )
 
