@@ -5,12 +5,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <vivid/ml/onnx_model.h>
-#include <vivid/ml/pose_detector.h>
+#include <vivid/onnx/onnx_model.h>
+#include <vivid/onnx/pose_detector.h>
 #include <iostream>
 #include <fstream>
 
-using namespace vivid::ml;
+using namespace vivid::onnx;
 using Catch::Matchers::WithinAbs;
 
 // Check if model file exists

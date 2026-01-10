@@ -5,9 +5,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <vivid/ml/onnx_model.h>
+#include <vivid/onnx/onnx_model.h>
 
-using namespace vivid::ml;
+using namespace vivid::onnx;
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("Tensor size calculation", "[ml][tensor]") {

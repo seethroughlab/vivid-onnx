@@ -1,10 +1,10 @@
-#include <vivid/ml/face_detector.h>
+#include <vivid/onnx/face_detector.h>
 #include <vivid/context.h>
 #include <iostream>
 #include <algorithm>
 #include <cmath>
 
-namespace vivid::ml {
+namespace vivid::onnx {
 
 // Static anchor box used for decoding
 static DetectedFace s_emptyFace = {};
@@ -132,8 +132,9 @@ void FaceDetector::onModelLoaded() {
 }
 
 void FaceDetector::prepareInputTensor(Context& ctx, Tensor& tensor) {
-    // BlazeFace expects NHWC format with values 0-255 or normalized
+    // BlazeFace expects NHWC format with values in range [-1, 1]
     // Shape: [1, height, width, channels]
+    // Normalization: pixel / 127.5 - 1.0
 
     int channels = (tensor.shape.size() >= 4) ? static_cast<int>(tensor.shape[3]) : 3;
     tensor.shape = {1, m_inputHeight, m_inputWidth, channels};
@@ -148,8 +149,17 @@ void FaceDetector::prepareInputTensor(Context& ctx, Tensor& tensor) {
         tensor.data.resize(tensorSize);
     }
 
-    // Convert input texture to tensor
+    // Convert input texture to tensor (gives us 0-1 normalized values for float32)
     bool success = textureToTensor(ctx, tensor, m_inputWidth, m_inputHeight);
+
+    // Convert from [0, 1] to [-1, 1] range for BlazeFace
+    // BlazeFace expects: pixel / 127.5 - 1.0 which is [0,255] -> [-1,1]
+    // Since textureToTensor gives us [0, 1], we convert: value * 2.0 - 1.0
+    if (success && tensor.type == TensorType::Float32) {
+        for (float& v : tensor.data) {
+            v = v * 2.0f - 1.0f;
+        }
+    }
 
     if (!success) {
         // Fill with gray placeholder if conversion fails
@@ -158,7 +168,7 @@ void FaceDetector::prepareInputTensor(Context& ctx, Tensor& tensor) {
         } else if (tensor.type == TensorType::Int32) {
             std::fill(tensor.dataI32.begin(), tensor.dataI32.end(), int32_t(128));
         } else {
-            std::fill(tensor.data.begin(), tensor.data.end(), 0.5f);
+            std::fill(tensor.data.begin(), tensor.data.end(), 0.0f);  // 0 in [-1,1] range
         }
     }
 }
@@ -166,11 +176,47 @@ void FaceDetector::prepareInputTensor(Context& ctx, Tensor& tensor) {
 void FaceDetector::processOutputTensor(const Tensor& tensor) {
     m_faces.clear();
 
-    // BlazeFace outputs:
-    // Output 0 (regressors): [1, 896, 16] - box offsets + landmarks
-    // Output 1 (classificators): [1, 896, 1] - confidence scores
+    // BlazeFace model output formats:
+    // 2-output: [regressors, scores] combined for all anchors
+    // 4-output: [scores1, scores2, regressors1, regressors2] split by feature map
+    //   - scores1: [1, 512, 1] for 16x16 feature map (512 anchors)
+    //   - scores2: [1, 384, 1] for 8x8 feature map (384 anchors)
+    //   - regressors1: [1, 512, 16] for 16x16 feature map
+    //   - regressors2: [1, 384, 16] for 8x8 feature map
 
-    if (m_outputTensors.size() < 2) {
+    if (m_outputTensors.size() == 4) {
+        // 4-output model: [scores1, scores2, regressors1, regressors2] split by feature map
+        const Tensor& scores1 = m_outputTensors[0];      // [1, 512, 1]
+        const Tensor& scores2 = m_outputTensors[1];      // [1, 384, 1]
+        const Tensor& regressors1 = m_outputTensors[2];  // [1, 512, 16]
+        const Tensor& regressors2 = m_outputTensors[3];  // [1, 384, 16]
+
+        if (scores1.data.empty() || regressors1.data.empty()) return;
+
+        // Concatenate scores: 512 + 384 = 896
+        std::vector<float> allScores;
+        allScores.reserve(scores1.data.size() + scores2.data.size());
+        allScores.insert(allScores.end(), scores1.data.begin(), scores1.data.end());
+        allScores.insert(allScores.end(), scores2.data.begin(), scores2.data.end());
+
+        // Concatenate regressors: 512*16 + 384*16
+        std::vector<float> allRegressors;
+        allRegressors.reserve(regressors1.data.size() + regressors2.data.size());
+        allRegressors.insert(allRegressors.end(), regressors1.data.begin(), regressors1.data.end());
+        allRegressors.insert(allRegressors.end(), regressors2.data.begin(), regressors2.data.end());
+
+        decodeDetections(allRegressors.data(), allScores.data(),
+                        static_cast<int>(m_anchors.size()));
+    } else if (m_outputTensors.size() >= 2) {
+        // 2-output model (regressors + classificators)
+        const Tensor& regressors = m_outputTensors[0];
+        const Tensor& scores = m_outputTensors[1];
+
+        if (regressors.data.empty() || scores.data.empty()) return;
+
+        decodeDetections(regressors.data.data(), scores.data.data(),
+                        static_cast<int>(m_anchors.size()));
+    } else if (m_outputTensors.size() == 1) {
         // Single output model - try to parse as combined format
         if (tensor.data.empty()) return;
 
@@ -188,34 +234,34 @@ void FaceDetector::processOutputTensor(const Tensor& tensor) {
                     DetectedFace face;
                     face.confidence = score;
 
-                    // Decode bounding box from anchor
-                    float cx = data[0] / m_inputWidth + m_anchors[i][0];
-                    float cy = data[1] / m_inputHeight + m_anchors[i][1];
-                    float w = data[2] / m_inputWidth;
-                    float h = data[3] / m_inputHeight;
+                    // Decode bounding box using BlazeFace formula (scale = 128)
+                    const float scale = 128.0f;
+                    float cx = data[0] / scale + m_anchors[i][0];
+                    float cy = data[1] / scale + m_anchors[i][1];
+                    float w = data[2] / scale;
+                    float h = data[3] / scale;
 
-                    face.bbox = glm::vec4(cx - w/2, cy - h/2, w, h);
+                    face.bbox = glm::vec4(
+                        std::clamp(cx - w/2, 0.0f, 1.0f),
+                        std::clamp(cy - h/2, 0.0f, 1.0f),
+                        std::clamp(w, 0.0f, 1.0f),
+                        std::clamp(h, 0.0f, 1.0f)
+                    );
 
-                    // Decode landmarks
+                    // Decode landmarks using same scale
                     for (int l = 0; l < 6; l++) {
-                        float lx = data[4 + l*2] / m_inputWidth + m_anchors[i][0];
-                        float ly = data[4 + l*2 + 1] / m_inputHeight + m_anchors[i][1];
-                        face.landmarks[l] = glm::vec2(lx, ly);
+                        float lx = data[4 + l*2] / scale + m_anchors[i][0];
+                        float ly = data[4 + l*2 + 1] / scale + m_anchors[i][1];
+                        face.landmarks[l] = glm::vec2(
+                            std::clamp(lx, 0.0f, 1.0f),
+                            std::clamp(ly, 0.0f, 1.0f)
+                        );
                     }
 
                     m_faces.push_back(face);
                 }
             }
         }
-    } else {
-        // Two-output model (regressors + classificators)
-        const Tensor& regressors = m_outputTensors[0];
-        const Tensor& scores = m_outputTensors[1];
-
-        if (regressors.data.empty() || scores.data.empty()) return;
-
-        decodeDetections(regressors.data.data(), scores.data.data(),
-                        static_cast<int>(m_anchors.size()));
     }
 
     // Apply non-max suppression
@@ -237,12 +283,14 @@ void FaceDetector::decodeDetections(const float* regressors, const float* scores
 
             const float* box = &regressors[i * 16];
 
-            // Decode bounding box
-            // BlazeFace uses center-offset encoding
-            float cx = box[0] / m_inputWidth + m_anchors[i][0];
-            float cy = box[1] / m_inputHeight + m_anchors[i][1];
-            float w = box[2] / m_inputWidth;
-            float h = box[3] / m_inputHeight;
+            // Decode bounding box using BlazeFace formula
+            // raw_output / scale * anchor_size + anchor_center
+            // Scale is 128 for front model (same as input size)
+            const float scale = 128.0f;
+            float cx = box[0] / scale + m_anchors[i][0];
+            float cy = box[1] / scale + m_anchors[i][1];
+            float w = box[2] / scale;
+            float h = box[3] / scale;
 
             // Convert to x,y,w,h format (normalized)
             face.bbox = glm::vec4(
@@ -252,10 +300,10 @@ void FaceDetector::decodeDetections(const float* regressors, const float* scores
                 std::clamp(h, 0.0f, 1.0f)
             );
 
-            // Decode 6 landmarks
+            // Decode 6 landmarks using same scale
             for (int l = 0; l < 6; l++) {
-                float lx = box[4 + l*2] / m_inputWidth + m_anchors[i][0];
-                float ly = box[4 + l*2 + 1] / m_inputHeight + m_anchors[i][1];
+                float lx = box[4 + l*2] / scale + m_anchors[i][0];
+                float ly = box[4 + l*2 + 1] / scale + m_anchors[i][1];
                 face.landmarks[l] = glm::vec2(
                     std::clamp(lx, 0.0f, 1.0f),
                     std::clamp(ly, 0.0f, 1.0f)
@@ -321,4 +369,4 @@ void FaceDetector::nonMaxSuppression() {
     m_faces = std::move(kept);
 }
 
-} // namespace vivid::ml
+} // namespace vivid::onnx

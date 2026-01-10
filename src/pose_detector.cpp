@@ -1,9 +1,9 @@
-#include <vivid/ml/pose_detector.h>
+#include <vivid/onnx/pose_detector.h>
 #include <vivid/context.h>
 #include <iostream>
 #include <algorithm>
 
-namespace vivid::ml {
+namespace vivid::onnx {
 
 PoseDetector::PoseDetector() {
     // Initialize keypoints to invalid positions
@@ -100,6 +100,13 @@ void PoseDetector::prepareInputTensor(Context& ctx, Tensor& tensor) {
     // Use texture-to-tensor conversion (handles both CPU and GPU paths)
     bool success = textureToTensor(ctx, tensor, m_inputWidth, m_inputHeight);
 
+    if (success && tensor.type == TensorType::Float32) {
+        // MoveNet float32 expects 0-255 values (not normalized 0-1)
+        // Base class gives us [0, 1], convert to [0, 255]
+        for (float& v : tensor.data) {
+            v = v * 255.0f;
+        }
+    }
 
     if (!success) {
         // If conversion fails, fill with gray placeholder
@@ -192,4 +199,4 @@ void PoseDetector::processOutputTensor(const Tensor& tensor) {
     }
 }
 
-} // namespace vivid::ml
+} // namespace vivid::onnx

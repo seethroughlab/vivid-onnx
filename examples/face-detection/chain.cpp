@@ -3,22 +3,28 @@
 // with bounding box and landmark visualization overlay
 //
 // Usage:
-//   - With webcam: ./vivid modules/vivid-onnx/examples/face-detection
+//   ./vivid examples/face-detection
+//
+// To use webcam instead of video file:
+//   1. Comment out the VideoPlayer section below
+//   2. Uncomment the Webcam section
 //
 // Model: BlazeFace from PINTO_model_zoo
 // https://github.com/PINTO0309/PINTO_model_zoo/tree/main/030_BlazeFace
 
 #include <vivid/vivid.h>
 #include <vivid/video/video.h>
-#include <vivid/ml/ml.h>
+#include <vivid/onnx/onnx.h>
 #include <vivid/effects/effects.h>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <fstream>
+#include <vector>
 
 using namespace vivid;
 using namespace vivid::video;
-using namespace vivid::ml;
+using namespace vivid::onnx;
 using namespace vivid::effects;
 
 // Colors for visualization
@@ -48,31 +54,61 @@ glm::vec4 getLandmarkColor(FaceLandmark lm) {
 void setup(Context& ctx) {
     auto& chain = ctx.chain();
 
-    // Video input - use webcam
-    auto& cam = chain.add<Webcam>("source");
-    cam.setResolution(1280, 720);
-    cam.setFrameRate(30);
+    // --- Video file input (default) ---
+    auto& video = chain.add<VideoPlayer>("source");
+    video.setFile("assets/face-demographics.mp4");
+    video.setLoop(true);
+
+    // --- Webcam input (uncomment to use instead of video) ---
+    // auto& cam = chain.add<Webcam>("source");
+    // cam.setResolution(1280, 720);
+    // cam.setFrameRate(30);
 
     // Face detector using BlazeFace
     auto& faces = chain.add<FaceDetector>("faces");
-    faces.input(&cam);
+    faces.input(&video);
 
-    // Model path - look in module assets directory
+    // Model path - try multiple locations (installed module, dev, relative)
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
-    std::string modelPath = home + "/.vivid/modules/vivid-onnx/assets/models/blazeface/face_detection_front_128x128_float32.onnx";
+    std::vector<std::string> modelPaths = {
+        // Installed module (vivid modules install)
+        home + "/.vivid/modules/vivid-onnx/assets/models/blazeface/face_detection_front_128x128_float32.onnx",
+        // Development: direct path to vivid-onnx repo
+        home + "/Developer/vivid-onnx/assets/models/blazeface/face_detection_front_128x128_float32.onnx",
+        // Relative to example directory (when running from within module)
+        "../../assets/models/blazeface/face_detection_front_128x128_float32.onnx",
+    };
+
+    std::string modelPath;
+    for (const auto& path : modelPaths) {
+        std::ifstream f(path);
+        if (f.good()) {
+            modelPath = path;
+            break;
+        }
+    }
+
+    if (modelPath.empty()) {
+        std::cerr << "ERROR: Could not find BlazeFace model. Tried:" << std::endl;
+        for (const auto& path : modelPaths) {
+            std::cerr << "  - " << path << std::endl;
+        }
+        modelPath = modelPaths[0];
+    }
+
     faces.model(modelPath);
-    faces.confidenceThreshold(0.5f);
+    faces.confidenceThreshold(0.20f);  // Tuned for BlazeFace ONNX model
     faces.maxFaces(5);
 
-    // Canvas overlay for face visualization
+    // Canvas overlay for face visualization (match video resolution)
     auto& canvas = chain.add<Canvas>("overlay");
-    canvas.size(1280, 720);
+    canvas.size(768, 432);
 
     // Composite video and face overlay
     auto& comp = chain.add<Composite>("output");
     comp.input(0, "source");
     comp.input(1, "overlay");
-    comp.mode(BlendMode::Over);
+    comp.mode = BlendMode::Over;
 
     chain.output("output");
 
@@ -87,8 +123,9 @@ void update(Context& ctx) {
     auto& faces = chain.get<FaceDetector>("faces");
     auto& canvas = chain.get<Canvas>("overlay");
 
-    const float width = 1280.0f;
-    const float height = 720.0f;
+    // Match video resolution (768x432)
+    const float width = 768.0f;
+    const float height = 432.0f;
     const float lineWidth = 3.0f;
     const float pointRadius = 6.0f;
 
@@ -106,15 +143,12 @@ void update(Context& ctx) {
         float w = bbox.z * width;
         float h = bbox.w * height;
 
-        // Draw bounding box
+        // Draw bounding box (use full alpha, not confidence-based)
         glm::vec4 boxColor = COLOR_BOX;
-        boxColor.a = conf;
 
-        canvas.strokeStyle(boxColor.r, boxColor.g, boxColor.b, boxColor.a);
+        canvas.strokeStyle(boxColor.r, boxColor.g, boxColor.b, 1.0f);
         canvas.lineWidth(lineWidth);
-        canvas.beginPath();
-        canvas.rect(x, y, w, h);
-        canvas.stroke();
+        canvas.strokeRect(x, y, w, h);
 
         // Draw corner accents (like FaceDetect in opencv)
         float corner = std::min(w, h) * 0.2f;
@@ -149,11 +183,9 @@ void update(Context& ctx) {
         canvas.lineTo(x + w, y + h - corner);
         canvas.stroke();
 
-        // Draw confidence label
+        // Draw confidence label background
         canvas.fillStyle(0.0f, 0.0f, 0.0f, 0.7f);
-        canvas.beginPath();
-        canvas.rect(x, y - 24, 80, 22);
-        canvas.fill();
+        canvas.fillRect(x, y - 24, 80, 22);
 
         // Draw landmarks
         for (int l = 0; l < static_cast<int>(FaceLandmark::Count); l++) {

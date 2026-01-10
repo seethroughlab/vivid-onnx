@@ -1,4 +1,4 @@
-#include <vivid/ml/onnx_model.h>
+#include <vivid/onnx/onnx_model.h>
 #include <vivid/context.h>
 #include <onnxruntime_cxx_api.h>
 #include <array>
@@ -7,7 +7,7 @@
 #include <numeric>
 
 
-namespace vivid::ml {
+namespace vivid::onnx {
 
 // =============================================================================
 // Tensor
@@ -179,7 +179,9 @@ void ONNXModel::process(Context& ctx) {
     if (!m_loaded || !m_inputOp) return;
 
     // Check that input provides CPU pixels (required for ML inference)
-    if (!m_inputOp->cpuPixels()) return;
+    if (!m_inputOp->cpuPixels()) {
+        return;  // Input not ready yet
+    }
 
     // Prepare input tensor (subclass can override)
     if (!m_inputTensors.empty()) {
@@ -327,9 +329,20 @@ bool ONNXModel::cpuPixelsToTensor(const io::ImageData& pixels, Tensor& tensor,
 
             auto getPixel = [&](int px, int py) -> std::array<float, 4> {
                 const uint8_t* p = pixelData + (py * srcWidth + px) * srcChannels;
-                std::array<float, 4> result = {0, 0, 0, 1};
-                for (int c = 0; c < srcChannels && c < 4; c++) {
-                    result[c] = p[c] / 255.0f;
+                std::array<float, 4> result = {0, 0, 0, 255};
+                // Source is BGRA (from AVFoundation), model expects RGB
+                // Swap B and R channels: BGRA -> RGBA
+                if (srcChannels >= 3) {
+                    result[0] = static_cast<float>(p[2]);  // R from B position
+                    result[1] = static_cast<float>(p[1]);  // G stays
+                    result[2] = static_cast<float>(p[0]);  // B from R position
+                    if (srcChannels >= 4) {
+                        result[3] = static_cast<float>(p[3]);  // A
+                    }
+                } else {
+                    for (int c = 0; c < srcChannels; c++) {
+                        result[c] = static_cast<float>(p[c]);
+                    }
                 }
                 return result;
             };
@@ -344,35 +357,39 @@ bool ONNXModel::cpuPixelsToTensor(const io::ImageData& pixels, Tensor& tensor,
                 result[c] = v0 * (1 - fy) + v1 * fy;
             }
 
+            // Store in tensor with appropriate format:
+            // - uint8/int32: raw 0-255 values (result is already 0-255)
+            // - float32: normalized 0-1 (most float models expect this)
             if (tensor.type == TensorType::UInt8) {
                 if (isNHWC) {
                     size_t baseIdx = (y * targetWidth + x) * channels;
                     for (int c = 0; c < channels && c < 4; c++)
-                        tensor.dataU8[baseIdx + c] = static_cast<uint8_t>(result[c] * 255.0f);
+                        tensor.dataU8[baseIdx + c] = static_cast<uint8_t>(result[c]);
                 } else {
                     size_t pixelIdx = y * targetWidth + x;
                     for (int c = 0; c < channels && c < 4; c++)
-                        tensor.dataU8[c * targetWidth * targetHeight + pixelIdx] = static_cast<uint8_t>(result[c] * 255.0f);
+                        tensor.dataU8[c * targetWidth * targetHeight + pixelIdx] = static_cast<uint8_t>(result[c]);
                 }
             } else if (tensor.type == TensorType::Int32) {
                 if (isNHWC) {
                     size_t baseIdx = (y * targetWidth + x) * channels;
                     for (int c = 0; c < channels && c < 4; c++)
-                        tensor.dataI32[baseIdx + c] = static_cast<int32_t>(result[c] * 255.0f);
+                        tensor.dataI32[baseIdx + c] = static_cast<int32_t>(result[c]);
                 } else {
                     size_t pixelIdx = y * targetWidth + x;
                     for (int c = 0; c < channels && c < 4; c++)
-                        tensor.dataI32[c * targetWidth * targetHeight + pixelIdx] = static_cast<int32_t>(result[c] * 255.0f);
+                        tensor.dataI32[c * targetWidth * targetHeight + pixelIdx] = static_cast<int32_t>(result[c]);
                 }
             } else {
+                // Float32: normalize to 0-1 range (BlazeFace, most float models)
                 if (isNHWC) {
                     size_t baseIdx = (y * targetWidth + x) * channels;
                     for (int c = 0; c < channels && c < 4; c++)
-                        tensor.data[baseIdx + c] = result[c];
+                        tensor.data[baseIdx + c] = result[c] / 255.0f;
                 } else {
                     size_t pixelIdx = y * targetWidth + x;
                     for (int c = 0; c < channels && c < 4; c++)
-                        tensor.data[c * targetWidth * targetHeight + pixelIdx] = result[c];
+                        tensor.data[c * targetWidth * targetHeight + pixelIdx] = result[c] / 255.0f;
                 }
             }
         }
@@ -381,4 +398,4 @@ bool ONNXModel::cpuPixelsToTensor(const io::ImageData& pixels, Tensor& tensor,
     return true;
 }
 
-} // namespace vivid::ml
+} // namespace vivid::onnx

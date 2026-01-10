@@ -5,9 +5,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include <vivid/ml/pose_detector.h>
+#include <vivid/onnx/pose_detector.h>
 
-using namespace vivid::ml;
+using namespace vivid::onnx;
 using Catch::Matchers::WithinAbs;
 
 TEST_CASE("PoseDetector defaults", "[ml][pose]") {

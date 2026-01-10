@@ -9,7 +9,8 @@
   "dependencies": [],
   "operators": [
     "ONNXModel",
-    "PoseDetector"
+    "PoseDetector",
+    "FaceDetector"
   ],
   "prebuilt": {
     "darwin-arm64": "https://github.com/seethroughlab/vivid-onnx/releases/download/${version}/vivid-onnx-darwin-arm64.tar.gz",

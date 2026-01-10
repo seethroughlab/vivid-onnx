@@ -51,13 +51,13 @@ MoveNet Lightning detects 17 body keypoints in real-time. The model is bundled i
 // examples/pose-tracking/chain.cpp
 #include <vivid/vivid.h>
 #include <vivid/video/video.h>
-#include <vivid/ml/ml.h>
+#include <vivid/onnx/onnx.h>
 #include <vivid/effects/effects.h>
 #include <cstdlib>
 
 using namespace vivid;
 using namespace vivid::video;
-using namespace vivid::ml;
+using namespace vivid::onnx;
 using namespace vivid::effects;
 
 void setup(Context& ctx) {
@@ -71,7 +71,7 @@ void setup(Context& ctx) {
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
     auto& pose = chain.add<PoseDetector>("pose");
     pose.input(&cam);
-    pose.model(home + "/.vivid/modules/vivid-onnx/src/assets/models/movenet/singlepose-lightning.onnx");
+    pose.model(home + "/.vivid/modules/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx");
 
     // Canvas for skeleton overlay
     auto& canvas = chain.add<Canvas>("skeleton");

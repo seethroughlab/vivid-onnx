@@ -37,18 +37,19 @@ Models from [PINTO_model_zoo](https://github.com/PINTO0309/PINTO_model_zoo).
 | Example | Description |
 |---------|-------------|
 | [pose-tracking](examples/pose-tracking) | Real-time body pose with skeleton overlay |
+| [face-detection](examples/face-detection) | Face detection with bounding boxes and landmarks |
 
 ## Quick Start: Pose Detection
 
 ```cpp
 #include <vivid/vivid.h>
 #include <vivid/video/video.h>
-#include <vivid/ml/ml.h>
+#include <vivid/onnx/onnx.h>
 #include <vivid/effects/effects.h>
 #include <cstdlib>
 
 using namespace vivid::video;
-using namespace vivid::ml;
+using namespace vivid::onnx;
 using namespace vivid::effects;
 
 void setup(Context& ctx) {
@@ -62,7 +63,7 @@ void setup(Context& ctx) {
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
     chain.add<PoseDetector>("pose")
         .input("webcam")
-        .model(home + "/.vivid/modules/vivid-onnx/src/assets/models/movenet/singlepose-lightning.onnx")
+        .model(home + "/.vivid/modules/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx")
         .confidenceThreshold(0.3f);
 
     // Canvas for skeleton overlay

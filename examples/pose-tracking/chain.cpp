@@ -3,23 +3,28 @@
 // with skeleton visualization overlay
 //
 // Usage:
-//   - With webcam: ./vivid modules/vivid-onnx/examples/pose-tracking
-//   - With video:  ./vivid modules/vivid-onnx/examples/pose-tracking --video path/to/video.mp4
+//   ./vivid examples/pose-tracking
+//
+// To use webcam instead of video file:
+//   1. Comment out the VideoPlayer section below
+//   2. Uncomment the Webcam section
 //
 // Model: MoveNet SinglePose Lightning from PINTO_model_zoo
 // https://github.com/PINTO0309/PINTO_model_zoo/tree/main/115_MoveNet
 
 #include <vivid/vivid.h>
 #include <vivid/video/video.h>
-#include <vivid/ml/ml.h>
+#include <vivid/onnx/onnx.h>
 #include <vivid/effects/effects.h>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <fstream>
+#include <vector>
 
 using namespace vivid;
 using namespace vivid::video;
-using namespace vivid::ml;
+using namespace vivid::onnx;
 using namespace vivid::effects;
 
 // Colors for different body parts (RGBA 0-1)
@@ -55,20 +60,50 @@ glm::vec4 getConnectionColor(Keypoint from, Keypoint to) {
 void setup(Context& ctx) {
     auto& chain = ctx.chain();
 
-    // Video input - use webcam by default
-    auto& cam = chain.add<Webcam>("source");
-    cam.setResolution(1280, 720);
-    cam.setFrameRate(30);
+    // --- Video file input (default) ---
+    auto& video = chain.add<VideoPlayer>("source");
+    video.setFile("assets/prom.mp4");
+    video.setLoop(true);
+
+    // --- Webcam input (uncomment to use instead of video) ---
+    // auto& cam = chain.add<Webcam>("source");
+    // cam.setResolution(1280, 720);
+    // cam.setFrameRate(30);
 
     // Pose detector using MoveNet SinglePose Lightning
     auto& pose = chain.add<PoseDetector>("pose");
-    pose.input(&cam);
+    pose.input(&video);
 
-    // Model path - look in module assets directory
+    // Model path - try multiple locations (installed module, dev, relative)
     std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
-    std::string modelPath = home + "/.vivid/modules/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx";
+    std::vector<std::string> modelPaths = {
+        // Installed module (vivid modules install)
+        home + "/.vivid/modules/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx",
+        // Development: direct path to vivid-onnx repo
+        home + "/Developer/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx",
+        // Relative to example directory (when running from within module)
+        "../../assets/models/movenet/singlepose-lightning.onnx",
+    };
+
+    std::string modelPath;
+    for (const auto& path : modelPaths) {
+        std::ifstream f(path);
+        if (f.good()) {
+            modelPath = path;
+            break;
+        }
+    }
+
+    if (modelPath.empty()) {
+        std::cerr << "ERROR: Could not find MoveNet model. Tried:" << std::endl;
+        for (const auto& path : modelPaths) {
+            std::cerr << "  - " << path << std::endl;
+        }
+        modelPath = modelPaths[0]; // Use first path anyway, will fail gracefully
+    }
+
     pose.model(modelPath);
-    pose.confidenceThreshold(0.1f);
+    pose.confidenceThreshold(0.3f);
 
     // Canvas overlay for skeleton visualization
     auto& canvas = chain.add<Canvas>("skeleton");
@@ -78,7 +113,7 @@ void setup(Context& ctx) {
     auto& comp = chain.add<Composite>("output");
     comp.input(0, "source");
     comp.input(1, "skeleton");
-    comp.mode(BlendMode::Over);
+    comp.mode = BlendMode::Over;
 
     chain.output("output");
 
@@ -97,7 +132,7 @@ void update(Context& ctx) {
     const float height = 720.0f;
     const float lineWidth = 4.0f;
     const float pointRadius = 8.0f;
-    const float minConfidence = 0.1f;
+    const float minConfidence = 0.3f;
 
     canvas.clear(0, 0, 0, 0);
 
@@ -106,7 +141,7 @@ void update(Context& ctx) {
         canvas.lineCap(LineCap::Round);
 
         // Draw skeleton lines
-        for (const auto& bone : ml::SKELETON_CONNECTIONS) {
+        for (const auto& bone : onnx::SKELETON_CONNECTIONS) {
             float conf1 = pose.confidence(bone.from);
             float conf2 = pose.confidence(bone.to);
 

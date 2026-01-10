@@ -136,6 +136,12 @@ jobs:
           # Copy module.json
           cp module.json package/vivid-onnx-${{ matrix.target }}/
 
+          # Copy ONNX models (MoveNet, BlazeFace, etc.)
+          cp -r assets package/vivid-onnx-${{ matrix.target }}/
+
+          # Copy examples
+          cp -r examples package/vivid-onnx-${{ matrix.target }}/
+
           # Create archive
           cd package
           tar -czvf vivid-onnx-${{ matrix.target }}.${{ matrix.archive_ext }} vivid-onnx-${{ matrix.target }}
@@ -159,6 +165,12 @@ jobs:
 
           # Copy module.json
           Copy-Item module.json package/vivid-onnx-${{ matrix.target }}/
+
+          # Copy ONNX models (MoveNet, BlazeFace, etc.)
+          Copy-Item -Recurse assets package/vivid-onnx-${{ matrix.target }}/
+
+          # Copy examples
+          Copy-Item -Recurse examples package/vivid-onnx-${{ matrix.target }}/
 
           # Create archive
           Compress-Archive -Path package/vivid-onnx-${{ matrix.target }} -DestinationPath package/vivid-onnx-${{ matrix.target }}.${{ matrix.archive_ext }}

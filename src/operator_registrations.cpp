@@ -7,14 +7,14 @@
  */
 
 #include <vivid/operator_registry.h>
-#include <vivid/ml/onnx_model.h>
-#include <vivid/ml/pose_detector.h>
-#include <vivid/ml/face_detector.h>
+#include <vivid/onnx/onnx_model.h>
+#include <vivid/onnx/pose_detector.h>
+#include <vivid/onnx/face_detector.h>
 
 // Use type aliases to match REGISTER_OPERATOR macro pattern
-using MLONNXModel = vivid::ml::ONNXModel;
-using MLPoseDetector = vivid::ml::PoseDetector;
-using MLFaceDetector = vivid::ml::FaceDetector;
+using MLONNXModel = vivid::onnx::ONNXModel;
+using MLPoseDetector = vivid::onnx::PoseDetector;
+using MLFaceDetector = vivid::onnx::FaceDetector;
 
 // Register ONNXModel - generic ONNX model inference operator
 REGISTER_OPERATOR(MLONNXModel, "ML", "Run ONNX model inference on input texture", true);
