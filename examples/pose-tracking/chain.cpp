@@ -70,7 +70,7 @@ void setup(Context& ctx) {
     // Pose detector using MoveNet SinglePose Lightning
     auto& pose = chain.add<PoseDetector>("pose");
     pose.input(&video);
-    pose.model("models:movenet/singlepose-lightning.onnx");
+    pose.model("models/movenet/singlepose-lightning.onnx");
     pose.confidenceThreshold(0.3f);
 
     // Canvas overlay for skeleton visualization

@@ -6,44 +6,12 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
-#include <mutex>
 #include <numeric>
 #include <vector>
 
 namespace fs = std::filesystem;
 
 namespace vivid::onnx {
-
-// =============================================================================
-// Asset registration (lazy, thread-safe)
-// =============================================================================
-
-namespace {
-    std::once_flag g_assetsRegistered;
-
-    void ensureAssetsRegistered() {
-        std::call_once(g_assetsRegistered, []() {
-            auto& loader = AssetLoader::instance();
-            fs::path execDir = loader.executableDir();
-
-            // Search paths relative to vivid executable (conventional Unix layout)
-            std::vector<fs::path> searchPaths = {
-                execDir / "../share/vivid/modules/vivid-onnx/assets/models",
-                execDir / "../lib/vivid-onnx/assets/models",
-            };
-
-            for (const auto& path : searchPaths) {
-                if (fs::exists(path)) {
-                    loader.registerAssetPath("models", fs::canonical(path));
-                    return;
-                }
-            }
-
-            // Development: AssetLoader already searches project dir via setProjectDir()
-            // so "assets/models/..." will be found automatically
-        });
-    }
-}
 
 // =============================================================================
 // Tensor
@@ -97,9 +65,7 @@ ONNXModel::ONNXModel() : m_ort(std::make_unique<OrtObjects>()) {
 ONNXModel::~ONNXModel() = default;
 
 ONNXModel& ONNXModel::model(const std::string& path) {
-    ensureAssetsRegistered();
-
-    // Try to resolve through AssetLoader (handles "models:" prefix and search paths)
+    // Try to resolve through AssetLoader (search paths from project and modules)
     auto resolved = AssetLoader::instance().resolve(path);
     if (!resolved.empty()) {
         m_modelPath = resolved.string();

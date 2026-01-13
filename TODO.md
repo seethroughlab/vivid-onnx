@@ -23,7 +23,8 @@ Rationale:
 ### Asset Management
 
 - [x] onnx pose-tracking example: `std::vector<std::string> modelPaths` isn't great. Need a better way to reference assets.
-  - Now uses `AssetLoader` with `models:` prefix (e.g., `pose.model("models:movenet/singlepose-lightning.onnx")`)
+  - Now uses `AssetLoader` with simple relative paths (e.g., `pose.model("models/movenet/singlepose-lightning.onnx")`)
+  - Module assets are auto-registered to search paths when module is loaded
 
 ### FaceDetector Improvements
 

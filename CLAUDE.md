@@ -53,7 +53,6 @@ MoveNet Lightning detects 17 body keypoints in real-time. The model is bundled i
 #include <vivid/video/video.h>
 #include <vivid/onnx/onnx.h>
 #include <vivid/effects/effects.h>
-#include <cstdlib>
 
 using namespace vivid;
 using namespace vivid::video;
@@ -68,10 +67,9 @@ void setup(Context& ctx) {
     cam.setResolution(640, 480);
 
     // MoveNet pose detection (Lightning = fast, Thunder = accurate)
-    std::string home = std::getenv("HOME") ? std::getenv("HOME") : "";
     auto& pose = chain.add<PoseDetector>("pose");
     pose.input(&cam);
-    pose.model(home + "/.vivid/modules/vivid-onnx/assets/models/movenet/singlepose-lightning.onnx");
+    pose.model("models/movenet/singlepose-lightning.onnx");
 
     // Canvas for skeleton overlay
     auto& canvas = chain.add<Canvas>("skeleton");

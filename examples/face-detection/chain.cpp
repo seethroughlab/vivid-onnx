@@ -64,7 +64,7 @@ void setup(Context& ctx) {
     // Face detector using BlazeFace
     auto& faces = chain.add<FaceDetector>("faces");
     faces.input(&video);
-    faces.model("models:blazeface/face_detection_front_128x128_float32.onnx");
+    faces.model("models/blazeface/face_detection_front_128x128_float32.onnx");
     faces.confidenceThreshold(0.20f);  // Tuned for BlazeFace ONNX model
     faces.maxFaces(5);
 
