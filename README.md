@@ -34,10 +34,17 @@ Models from [PINTO_model_zoo](https://github.com/PINTO0309/PINTO_model_zoo).
 
 ## Examples
 
+Minimal, focused examples (~50-100 lines) demonstrating core API patterns:
+
 | Example | Description |
 |---------|-------------|
 | [pose-tracking](examples/pose-tracking) | Real-time body pose with skeleton overlay |
 | [face-detection](examples/face-detection) | Face detection with bounding boxes and landmarks |
+
+## Examples vs Showcase
+
+- **`examples/`** - Minimal, focused code (~50-100 lines) demonstrating core API patterns. Designed for quick reference and LLM consumption.
+- **`showcase/`** - Rich, complete demonstrations (200+ lines) with UI, visuals, and creative applications. Designed for user inspiration.
 
 ## Quick Start: Pose Detection
 
